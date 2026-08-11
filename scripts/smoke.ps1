@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repositoryRoot 'src\KevinZonda.KTerm\KevinZonda.KTerm.csproj'
 $executable = Join-Path $repositoryRoot 'src\KevinZonda.KTerm\bin\Debug\net10.0-windows\KevinZonda.KTerm.exe'
+$environmentProbe = Join-Path ([IO.Path]::GetTempPath()) "kterm-smoke-$([Guid]::NewGuid().ToString('N')).txt"
 
 dotnet build $project --nologo
 if ($LASTEXITCODE -ne 0) {
@@ -10,11 +11,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $env:KTERM_SMOKE_TEST = '1'
+$env:KTERM_SMOKE_OUTPUT = $environmentProbe
 try {
     $application = Start-Process -FilePath $executable -WorkingDirectory (Split-Path $executable) -PassThru
 }
 finally {
     Remove-Item Env:\KTERM_SMOKE_TEST -ErrorAction SilentlyContinue
+    Remove-Item Env:\KTERM_SMOKE_OUTPUT -ErrorAction SilentlyContinue
 }
 
 $children = @()
@@ -31,13 +34,25 @@ try {
         $shells = @($children | Where-Object Name -in @('powershell.exe', 'pwsh.exe', 'cmd.exe'))
         $conhosts = @($children | Where-Object Name -eq 'conhost.exe')
     }
-    while (($shells.Count -lt 5 -or $conhosts.Count -lt 5) -and [DateTime]::UtcNow -lt $deadline)
+    while (($shells.Count -lt 5 -or
+        $conhosts.Count -lt 5 -or
+        -not (Test-Path -LiteralPath $environmentProbe)) -and [DateTime]::UtcNow -lt $deadline)
 
     if ($shells.Count -ne 5) {
         throw "Expected 5 independent Shell processes, found $($shells.Count)."
     }
     if ($conhosts.Count -ne 5) {
         throw "Expected 5 ConPTY conhost processes, found $($conhosts.Count)."
+    }
+    if (-not (Test-Path -LiteralPath $environmentProbe)) {
+        throw 'The shell environment probe did not complete.'
+    }
+
+    $environmentValues = @(Get-Content -LiteralPath $environmentProbe)
+    if ($environmentValues.Count -ne 2 -or
+        $environmentValues[0] -ne 'xterm-256color' -or
+        $environmentValues[1] -ne 'truecolor') {
+        throw "Unexpected shell environment: $($environmentValues -join ', ')."
     }
 }
 finally {
@@ -55,6 +70,8 @@ finally {
     if ($remaining.Count -ne 0) {
         throw "KTerm left $($remaining.Count) child processes running after shutdown."
     }
+
+    [IO.File]::Delete($environmentProbe)
 }
 
-Write-Output 'KTerm smoke test passed: 2 tabs, 2x2 active layout, 5 Shells, 5 ConPTY hosts, 0 leaked child processes.'
+Write-Output 'KTerm smoke test passed: xterm-256color/truecolor, 2 tabs, 2x2 active layout, 5 Shells, 5 ConPTY hosts, 0 leaked child processes.'

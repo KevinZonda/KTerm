@@ -9,6 +9,8 @@ internal sealed record AppSettings
 
     public FontSettings Font { get; init; } = new();
 
+    public ThemeSettings Theme { get; init; } = new();
+
     internal static AppSettings Normalize(AppSettings? settings)
     {
         var font = settings?.Font ?? new FontSettings();
@@ -18,6 +20,7 @@ internal sealed record AppSettings
             family = DefaultFontFamily;
         }
 
+        var theme = TerminalThemeCatalog.Find(settings?.Theme?.Name);
         return new AppSettings
         {
             Font = new FontSettings
@@ -29,6 +32,10 @@ internal sealed record AppSettings
                 LineHeight = double.IsFinite(font.LineHeight)
                     ? Math.Clamp(font.LineHeight, 0.8, 2)
                     : DefaultLineHeight
+            },
+            Theme = new ThemeSettings
+            {
+                Name = theme.Name
             }
         };
     }
@@ -41,4 +48,9 @@ internal sealed record FontSettings
     public double Size { get; init; } = AppSettings.DefaultFontSize;
 
     public double LineHeight { get; init; } = AppSettings.DefaultLineHeight;
+}
+
+internal sealed record ThemeSettings
+{
+    public string Name { get; init; } = TerminalThemeCatalog.DefaultName;
 }

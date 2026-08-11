@@ -1,3 +1,5 @@
+import { DEFAULT_THEME_NAME, normalizeTerminalThemeName } from './themes';
+
 export interface SessionCreated {
   sessionId: string;
   shellName: string;
@@ -12,6 +14,11 @@ export interface FontSettings {
 
 export interface AppSettings {
   font: FontSettings;
+  theme: ThemeSettings;
+}
+
+export interface ThemeSettings {
+  name: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -19,6 +26,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     family: 'Cascadia Mono, Cascadia Code, Consolas, monospace',
     size: 14,
     lineHeight: 1.12
+  },
+  theme: {
+    name: DEFAULT_THEME_NAME
   }
 };
 
@@ -89,10 +99,13 @@ export class NativeBridge {
       return structuredClone(DEFAULT_SETTINGS);
     }
 
-    const font = (settings as Partial<AppSettings>).font;
-    if (typeof font !== 'object' || font === null) {
-      return structuredClone(DEFAULT_SETTINGS);
-    }
+    const partialSettings = settings as Partial<AppSettings>;
+    const font = typeof partialSettings.font === 'object' && partialSettings.font !== null
+      ? partialSettings.font
+      : DEFAULT_SETTINGS.font;
+    const theme = typeof partialSettings.theme === 'object' && partialSettings.theme !== null
+      ? partialSettings.theme
+      : DEFAULT_SETTINGS.theme;
 
     const family = typeof font.family === 'string' && font.family.trim()
       ? font.family.trim()
@@ -104,7 +117,10 @@ export class NativeBridge {
       ? Math.min(2, Math.max(0.8, font.lineHeight))
       : DEFAULT_SETTINGS.font.lineHeight;
 
-    return { font: { family, size, lineHeight } };
+    return {
+      font: { family, size, lineHeight },
+      theme: { name: normalizeTerminalThemeName(theme.name) }
+    };
   }
 
   public writeClipboard(text: string): void {

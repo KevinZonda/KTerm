@@ -2,7 +2,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import type { IDisposable } from '@xterm/xterm';
-import type { FontSettings, NativeBridge, SessionCreated } from './bridge';
+import type { FontSettings, NativeBridge, SessionCreated, ThemeSettings } from './bridge';
+import { resolveTerminalTheme } from './themes';
 
 export interface TerminalCallbacks {
   onFocus(sessionId: string): void;
@@ -33,7 +34,8 @@ export class TerminalController {
     session: SessionCreated,
     bridge: NativeBridge,
     callbacks: TerminalCallbacks,
-    font: FontSettings
+    font: FontSettings,
+    theme: ThemeSettings
   ) {
     this.sessionId = session.sessionId;
     this.shellName = session.shellName;
@@ -56,29 +58,7 @@ export class TerminalController {
       fontSize: font.size,
       lineHeight: font.lineHeight,
       scrollback: 5000,
-      theme: {
-        background: '#0c0f14',
-        foreground: '#d8dee9',
-        cursor: '#8fbcbb',
-        cursorAccent: '#0c0f14',
-        selectionBackground: '#3b5268',
-        black: '#1b2028',
-        red: '#e06c75',
-        green: '#98c379',
-        yellow: '#e5c07b',
-        blue: '#61afef',
-        magenta: '#c678dd',
-        cyan: '#56b6c2',
-        white: '#abb2bf',
-        brightBlack: '#5c6370',
-        brightRed: '#e06c75',
-        brightGreen: '#98c379',
-        brightYellow: '#e5c07b',
-        brightBlue: '#61afef',
-        brightMagenta: '#c678dd',
-        brightCyan: '#56b6c2',
-        brightWhite: '#ffffff'
-      }
+      theme: resolveTerminalTheme(theme.name)
     });
     this.terminal.loadAddon(this.fitAddon);
 
@@ -151,6 +131,10 @@ export class TerminalController {
     if (this.opened) {
       this.scheduleFit();
     }
+  }
+
+  public applyThemeSettings(theme: ThemeSettings): void {
+    this.terminal.options.theme = resolveTerminalTheme(theme.name);
   }
 
   public scheduleFit(): void {

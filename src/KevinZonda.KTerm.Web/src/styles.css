@@ -1,4 +1,6 @@
 :root {
+  --terminal-background: #0c0f14;
+  --terminal-foreground: #d8dee9;
   color: #d8dee9;
   background: #0c0f14;
   font-family: Inter, "Segoe UI", sans-serif;
@@ -115,7 +117,7 @@ button {
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background: #0c0f14;
+  background: var(--terminal-background);
 }
 
 .split {
@@ -172,7 +174,7 @@ button {
   min-height: 0;
   padding: 5px 4px 3px 7px;
   overflow: hidden;
-  background: #0c0f14;
+  background: var(--terminal-background);
   outline: 1px solid transparent;
   outline-offset: -2px;
 }
@@ -182,7 +184,7 @@ button {
 }
 
 .terminal-pane.exited {
-  background: #101318;
+  background: var(--terminal-background);
 }
 
 .terminal-host,
@@ -192,7 +194,7 @@ button {
 }
 
 .terminal-host .xterm-viewport {
-  background-color: #0c0f14;
+  background-color: var(--terminal-background);
   overflow-x: hidden;
   scrollbar-color: #3b4655 transparent;
   scrollbar-width: thin;

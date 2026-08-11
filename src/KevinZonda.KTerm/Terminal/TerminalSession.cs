@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Runtime.InteropServices;
 using System.Text;
 using KevinZonda.KTerm.Interop;
@@ -88,6 +89,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         FileStream? inputStream = null;
         FileStream? outputStream = null;
         IntPtr attributeList = IntPtr.Zero;
+        IntPtr environmentBlock = IntPtr.Zero;
 
         try
         {
@@ -139,6 +141,7 @@ internal sealed class TerminalSession : IAsyncDisposable
             };
 
             var commandLine = new StringBuilder($"\"{shellPath}\"");
+            environmentBlock = CreateShellEnvironmentBlock();
             var created = NativeMethods.CreateProcessW(
                 shellPath,
                 commandLine,
@@ -146,7 +149,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                 IntPtr.Zero,
                 false,
                 NativeMethods.ExtendedStartupInfoPresent | NativeMethods.CreateUnicodeEnvironment,
-                IntPtr.Zero,
+                environmentBlock,
                 Environment.CurrentDirectory,
                 ref startupInfo,
                 out var processInformation);
@@ -191,7 +194,30 @@ internal sealed class TerminalSession : IAsyncDisposable
                 NativeMethods.DeleteProcThreadAttributeList(attributeList);
                 Marshal.FreeHGlobal(attributeList);
             }
+
+            if (environmentBlock != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(environmentBlock);
+            }
         }
+    }
+
+    private static IntPtr CreateShellEnvironmentBlock()
+    {
+        var environment = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
+        {
+            if (variable.Key is string name && variable.Value is string value)
+            {
+                environment[name] = value;
+            }
+        }
+
+        environment["TERM"] = "xterm-256color";
+        environment["COLORTERM"] = "truecolor";
+        var block = string.Join('\0', environment.Select(variable => $"{variable.Key}={variable.Value}"))
+            + "\0\0";
+        return Marshal.StringToHGlobalUni(block);
     }
 
     internal async Task WriteAsync(string data)

@@ -350,6 +350,7 @@ internal sealed class MainForm : Form
 
         _webView.CoreWebView2.NavigationCompleted -= HandleDebugNavigationCompleted;
         await Task.Delay(1_500);
+        await DispatchDebugEnvironmentProbe();
         await DispatchDebugShortcut("KeyT", "t", 0x54);
         await Task.Delay(500);
         await DispatchDebugShortcut("Backslash", "\\", 0xDC);
@@ -370,6 +371,26 @@ internal sealed class MainForm : Form
             "Input.insertText",
             JsonSerializer.Serialize(new { text = "echo KTERM_SMOKE" }));
         await DispatchDebugShortcut("Enter", "\r", 0x0D, modifiers: 0);
+    }
+
+    private async Task DispatchDebugEnvironmentProbe()
+    {
+        var outputPath = Environment.GetEnvironmentVariable("KTERM_SMOKE_OUTPUT");
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            return;
+        }
+
+        await DispatchDebugClick(250, 250);
+        var escapedPath = outputPath.Replace("'", "''", StringComparison.Ordinal);
+        await _webView.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.insertText",
+            JsonSerializer.Serialize(new
+            {
+                text = $"@($env:TERM,$env:COLORTERM) | Set-Content -LiteralPath '{escapedPath}'"
+            }));
+        await DispatchDebugShortcut("Enter", "\r", 0x0D, modifiers: 0);
+        await Task.Delay(250);
     }
 
     private async Task DispatchDebugShortcut(string code, string key, int virtualKey, int modifiers = 1)

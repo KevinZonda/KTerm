@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS } from './bridge';
 import type { AppSettings, BridgeEvent, NativeBridge, SessionCreated } from './bridge';
 import { TerminalController } from './terminal-controller';
 import type { TerminalCallbacks } from './terminal-controller';
+import { applyTerminalThemeToDocument } from './themes';
 
 type SplitDirection = 'columns' | 'rows';
 
@@ -189,7 +190,13 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private addTerminal(session: SessionCreated): void {
-    const terminal = new TerminalController(session, this.bridge, this, this.settings.font);
+    const terminal = new TerminalController(
+      session,
+      this.bridge,
+      this,
+      this.settings.font,
+      this.settings.theme
+    );
     this.terminals.set(session.sessionId, terminal);
 
     const pending = this.earlyOutput.get(session.sessionId);
@@ -201,7 +208,11 @@ export class Workspace implements TerminalCallbacks {
 
   private applySettings(settings: AppSettings): void {
     this.settings = settings;
-    this.terminals.forEach(terminal => terminal.applyFontSettings(settings.font));
+    applyTerminalThemeToDocument(settings.theme.name);
+    this.terminals.forEach(terminal => {
+      terminal.applyFontSettings(settings.font);
+      terminal.applyThemeSettings(settings.theme);
+    });
   }
 
   private handleOutput(event: BridgeEvent): void {

@@ -16,6 +16,8 @@ internal sealed class SettingsForm : Form
     private readonly NumericUpDown _fontSize = new();
     private readonly NumericUpDown _lineHeight = new();
     private readonly Label _preview = new();
+    private readonly ComboBox _themeName = new();
+    private readonly Panel _themePreview = new();
     private readonly List<Font> _previewFonts = [];
 
     internal SettingsForm(AppSettings settings)
@@ -34,6 +36,7 @@ internal sealed class SettingsForm : Form
 
         Controls.Add(CreateLayout());
         PopulateFonts();
+        PopulateThemes();
         ApplyValues(settings);
         UpdatePreview();
     }
@@ -45,6 +48,10 @@ internal sealed class SettingsForm : Form
             Family = _fontFamily.Text,
             Size = decimal.ToDouble(_fontSize.Value),
             LineHeight = decimal.ToDouble(_lineHeight.Value)
+        },
+        Theme = new ThemeSettings
+        {
+            Name = _themeName.Text
         }
     });
 
@@ -186,13 +193,31 @@ internal sealed class SettingsForm : Form
             Padding = new Padding(16),
             UseVisualStyleBackColor = false
         };
-        page.Controls.Add(new Label
+
+        var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Text = "Theme settings will be added next.",
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(174, 183, 197)
-        });
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = SurfaceColor,
+            Margin = new Padding(0)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(CreateLabel("Color scheme"), 0, 0);
+
+        ConfigureField(_themeName);
+        _themeName.DropDownStyle = ComboBoxStyle.DropDownList;
+        _themeName.Margin = new Padding(0, 5, 0, 16);
+        _themeName.SelectedIndexChanged += (_, _) => _themePreview.Invalidate();
+        layout.Controls.Add(_themeName, 0, 1);
+
+        _themePreview.Dock = DockStyle.Fill;
+        _themePreview.Margin = new Padding(0);
+        _themePreview.Paint += PaintThemePreview;
+        layout.Controls.Add(_themePreview, 0, 2);
+        page.Controls.Add(layout);
         return page;
     }
 
@@ -249,12 +274,25 @@ internal sealed class SettingsForm : Form
             .ToArray());
     }
 
+    private void PopulateThemes()
+    {
+        _themeName.Items.AddRange(TerminalThemeCatalog.All
+            .Select(theme => theme.Name)
+            .Cast<object>()
+            .ToArray());
+    }
+
     private void ApplyValues(AppSettings settings)
     {
         var normalized = AppSettings.Normalize(settings);
         _fontFamily.Text = normalized.Font.Family;
         _fontSize.Value = (decimal)normalized.Font.Size;
         _lineHeight.Value = (decimal)normalized.Font.LineHeight;
+        _themeName.SelectedItem = normalized.Theme.Name;
+        if (_themeName.SelectedIndex < 0)
+        {
+            _themeName.SelectedIndex = 0;
+        }
     }
 
     private void UpdatePreview()
@@ -285,6 +323,42 @@ internal sealed class SettingsForm : Form
         }
 
         return new Font(FontFamily.GenericMonospace, size, FontStyle.Regular, GraphicsUnit.Pixel);
+    }
+
+    private void PaintThemePreview(object? sender, PaintEventArgs eventArgs)
+    {
+        var theme = TerminalThemeCatalog.Find(_themeName.Text);
+        var bounds = _themePreview.ClientRectangle;
+        using var background = new SolidBrush(ColorTranslator.FromHtml(theme.Background));
+        eventArgs.Graphics.FillRectangle(background, bounds);
+        ControlPaint.DrawBorder(eventArgs.Graphics, bounds, BorderColor, ButtonBorderStyle.Solid);
+
+        var textBounds = new Rectangle(16, 14, Math.Max(0, bounds.Width - 32), 28);
+        TextRenderer.DrawText(
+            eventArgs.Graphics,
+            "PS C:\\> npm test  AaBb 0123",
+            Font,
+            textBounds,
+            ColorTranslator.FromHtml(theme.Foreground),
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+        const int gap = 4;
+        const int columns = 8;
+        var swatchWidth = Math.Max(8, (bounds.Width - 32 - ((columns - 1) * gap)) / columns);
+        const int swatchHeight = 18;
+        var swatchTop = Math.Max(48, bounds.Height - (swatchHeight * 2) - gap - 16);
+        for (var index = 0; index < theme.AnsiColors.Count; index++)
+        {
+            var row = index / columns;
+            var column = index % columns;
+            var swatchBounds = new Rectangle(
+                16 + (column * (swatchWidth + gap)),
+                swatchTop + (row * (swatchHeight + gap)),
+                swatchWidth,
+                swatchHeight);
+            using var swatch = new SolidBrush(ColorTranslator.FromHtml(theme.AnsiColors[index]));
+            eventArgs.Graphics.FillRectangle(swatch, swatchBounds);
+        }
     }
 
     private static Label CreateLabel(string text) => new()
