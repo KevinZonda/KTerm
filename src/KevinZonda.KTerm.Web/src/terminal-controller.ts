@@ -200,6 +200,13 @@ export class TerminalController {
   }
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
+    if (this.copySelection()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.terminal.clearSelection();
+      return;
+    }
+
     if (this.terminal.modes.mouseTrackingMode !== 'none') {
       return;
     }
