@@ -7,6 +7,7 @@ import { resolveTerminalTheme } from './themes';
 
 export interface TerminalCallbacks {
   onFocus(sessionId: string): void;
+  onFontSizeChanged(sessionId: string, fontSize: number): void;
   onTitle(sessionId: string, title: string): void;
 }
 
@@ -255,6 +256,7 @@ export class TerminalController {
     this.terminal.options.fontSize = nextSize;
     this.scheduleFit();
     this.focus();
+    this.callbacks.onFontSizeChanged(this.sessionId, nextSize);
   };
 
 }

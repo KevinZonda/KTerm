@@ -39,6 +39,7 @@ export class Workspace implements TerminalCallbacks {
   private focusedPaneId?: string;
   private settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
   private operationPending = false;
+  private fontSaveTimer?: number;
 
   public constructor(bridge: NativeBridge) {
     this.bridge = bridge;
@@ -112,6 +113,27 @@ export class Workspace implements TerminalCallbacks {
     pane.activeSessionId = sessionId;
     this.focusedPaneId = pane.id;
     this.updateFocusState();
+  }
+
+  public onFontSizeChanged(sessionId: string, fontSize: number): void {
+    if (this.fontSaveTimer !== undefined) {
+      window.clearTimeout(this.fontSaveTimer);
+      this.fontSaveTimer = undefined;
+    }
+    if (!this.isOnlyTerminal(sessionId)) {
+      return;
+    }
+
+    this.fontSaveTimer = window.setTimeout(() => {
+      this.fontSaveTimer = undefined;
+      if (!this.isOnlyTerminal(sessionId)) {
+        return;
+      }
+
+      void this.bridge.saveFontSize(fontSize)
+        .then(settings => { this.settings = settings; })
+        .catch(error => this.setStatus(`Unable to save font size: ${String(error)}`, true));
+    }, 400);
   }
 
   public onTitle(sessionId: string, title: string): void {
@@ -229,6 +251,15 @@ export class Workspace implements TerminalCallbacks {
       pending.forEach(data => terminal.write(data));
       this.earlyOutput.delete(session.sessionId);
     }
+  }
+
+  private isOnlyTerminal(sessionId: string): boolean {
+    if (this.terminals.size !== 1 || this.panes.size !== 1) {
+      return false;
+    }
+
+    const pane = this.panes.values().next().value as PaneState | undefined;
+    return pane?.tabs.length === 1 && pane.activeSessionId === sessionId;
   }
 
   private applySettings(settings: AppSettings): void {

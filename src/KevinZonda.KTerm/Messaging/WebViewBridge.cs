@@ -17,6 +17,7 @@ internal sealed class WebViewBridge : IDisposable
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
     private readonly Action _openSettings;
+    private readonly Func<double, Task<AppSettings>> _saveFontSize;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _outputQueues = new();
     private readonly System.Windows.Forms.Timer _outputTimer;
     private AppSettings _settings;
@@ -26,11 +27,13 @@ internal sealed class WebViewBridge : IDisposable
         WebView2 webView,
         TerminalSessionManager sessions,
         Action openSettings,
+        Func<double, Task<AppSettings>> saveFontSize,
         AppSettings settings)
     {
         _webView = webView;
         _sessions = sessions;
         _openSettings = openSettings;
+        _saveFontSize = saveFontSize;
         _settings = settings;
         _sessions.OutputReceived += QueueOutput;
         _sessions.SessionExited += QueueExit;
@@ -117,6 +120,11 @@ internal sealed class WebViewBridge : IDisposable
 
                 case "window.settings":
                     _webView.BeginInvoke(_openSettings);
+                    break;
+
+                case "settings.fontSize":
+                    _settings = await _saveFontSize(GetDouble(message.Payload, "size", 14));
+                    Post("settings.saved", message.RequestId, payload: new { settings = _settings });
                     break;
 
                 default:
@@ -248,6 +256,18 @@ internal sealed class WebViewBridge : IDisposable
         if (payload.ValueKind == JsonValueKind.Object &&
             payload.TryGetProperty(propertyName, out var property) &&
             property.TryGetInt32(out var value))
+        {
+            return value;
+        }
+
+        return defaultValue;
+    }
+
+    private static double GetDouble(JsonElement payload, string propertyName, double defaultValue)
+    {
+        if (payload.ValueKind == JsonValueKind.Object &&
+            payload.TryGetProperty(propertyName, out var property) &&
+            property.TryGetDouble(out var value))
         {
             return value;
         }

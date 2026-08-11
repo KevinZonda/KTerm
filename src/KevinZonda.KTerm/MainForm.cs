@@ -137,6 +137,7 @@ internal sealed class MainForm : Form
             _webView,
             _sessions,
             ShowSettings,
+            SaveFontSize,
             _settings);
 
         core.Navigate($"https://{AppHostName}/index.html");
@@ -446,6 +447,15 @@ internal sealed class MainForm : Form
             _settingsOpen = false;
             SetSettingsSystemMenuEnabled(true);
         }
+    }
+
+    private async Task<AppSettings> SaveFontSize(double size)
+    {
+        _settings = await _settingsStore.SaveAsync(_settings with
+        {
+            Font = _settings.Font with { Size = size }
+        });
+        return _settings;
     }
 
     private async void HandleFormClosing(object? sender, FormClosingEventArgs eventArgs)
