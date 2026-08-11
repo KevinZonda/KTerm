@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
+using KevinZonda.KTerm.Interop;
 using KevinZonda.KTerm.Messaging;
 using KevinZonda.KTerm.Terminal;
 using Microsoft.Web.WebView2.Core;
@@ -10,12 +12,19 @@ namespace KevinZonda.KTerm;
 internal sealed class MainForm : Form
 {
     private const string AppHostName = "app.kterm";
+    private const int TitleBarHeight = 36;
+
+    private static readonly Color FrameColor = Color.FromArgb(23, 27, 34);
+    private static readonly Color FrameBorderColor = Color.FromArgb(48, 56, 69);
+    private static readonly Color FrameTextColor = Color.FromArgb(216, 222, 233);
 
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions = new();
     private WebViewBridge? _bridge;
+    private CoreWebView2WindowControlsOverlay? _windowControlsOverlay;
     private bool _initialized;
     private bool _allowClose;
+    private bool _customFrameActive = true;
 
     internal MainForm()
     {
@@ -24,6 +33,7 @@ internal sealed class MainForm : Form
         ClientSize = new Size(1100, 720);
         MinimumSize = new Size(640, 400);
         StartPosition = FormStartPosition.CenterScreen;
+        FormBorderStyle = FormBorderStyle.None;
 
         _webView = new WebView2
         {
@@ -34,6 +44,26 @@ internal sealed class MainForm : Form
 
         Shown += HandleShown;
         FormClosing += HandleFormClosing;
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var parameters = base.CreateParams;
+            parameters.Style |= (int)(
+                NativeMethods.WindowStylePopup |
+                NativeMethods.WindowStyleThickFrame |
+                NativeMethods.WindowStyleMinimizeBox |
+                NativeMethods.WindowStyleMaximizeBox);
+            return parameters;
+        }
+    }
+
+    protected override void OnHandleCreated(EventArgs eventArgs)
+    {
+        base.OnHandleCreated(eventArgs);
+        ApplyDwmFrameColors();
     }
 
     private async void HandleShown(object? sender, EventArgs eventArgs)
@@ -91,6 +121,8 @@ internal sealed class MainForm : Form
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
+        core.Settings.IsNonClientRegionSupportEnabled = true;
+        core.Profile.PreferredColorScheme = CoreWebView2PreferredColorScheme.Dark;
 #if DEBUG
         core.Settings.AreDevToolsEnabled = true;
 #else
@@ -103,6 +135,7 @@ internal sealed class MainForm : Form
 #endif
         core.NewWindowRequested += HandleNewWindowRequested;
         core.ProcessFailed += HandleProcessFailed;
+        ConfigureWindowControlsOverlay(core);
         _bridge = new WebViewBridge(_webView, _sessions);
 
         core.Navigate($"https://{AppHostName}/index.html");
@@ -204,6 +237,85 @@ internal sealed class MainForm : Form
     private void HandleProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs eventArgs) =>
         _bridge?.NotifyRuntimeFailure(eventArgs.ProcessFailedKind.ToString());
 
+    private void ConfigureWindowControlsOverlay(CoreWebView2 core)
+    {
+        try
+        {
+            _windowControlsOverlay = core.WindowControlsOverlay;
+            _windowControlsOverlay.IsEnabled = true;
+            UpdateWindowControlsOverlayHeight();
+            _windowControlsOverlay.BackgroundColor = FrameColor;
+            core.WindowCloseRequested += HandleWindowCloseRequested;
+        }
+        catch (Exception exception) when (exception is COMException or NotImplementedException)
+        {
+            _windowControlsOverlay = null;
+            RestoreNativeFrame();
+        }
+    }
+
+    private void HandleWindowCloseRequested(object? sender, object eventArgs) => Close();
+
+    private void UpdateWindowControlsOverlayHeight()
+    {
+        if (_windowControlsOverlay is not null)
+        {
+            _windowControlsOverlay.Height = TitleBarHeight;
+        }
+    }
+
+    private void RestoreNativeFrame()
+    {
+        if (!_customFrameActive || !IsHandleCreated)
+        {
+            return;
+        }
+
+        var style = NativeMethods.GetWindowLongPtr(Handle, NativeMethods.WindowStyleIndex);
+        style &= ~NativeMethods.WindowStylePopup;
+        style |= NativeMethods.WindowStyleCaption |
+                 NativeMethods.WindowStyleSystemMenu |
+                 NativeMethods.WindowStyleThickFrame |
+                 NativeMethods.WindowStyleMinimizeBox |
+                 NativeMethods.WindowStyleMaximizeBox;
+        NativeMethods.SetWindowLongPtr(Handle, NativeMethods.WindowStyleIndex, style);
+        NativeMethods.SetWindowPos(
+            Handle,
+            IntPtr.Zero,
+            0,
+            0,
+            0,
+            0,
+            NativeMethods.SetWindowPositionNoMove |
+            NativeMethods.SetWindowPositionNoSize |
+            NativeMethods.SetWindowPositionNoZOrder |
+            NativeMethods.SetWindowPositionNoActivate |
+            NativeMethods.SetWindowPositionFrameChanged);
+        _customFrameActive = false;
+        ApplyDwmFrameColors();
+    }
+
+    private void ApplyDwmFrameColors()
+    {
+        if (!IsHandleCreated)
+        {
+            return;
+        }
+
+        var enabled = 1;
+        var roundedCorners = 2;
+        var borderColor = ColorTranslator.ToWin32(FrameBorderColor);
+        var captionColor = ColorTranslator.ToWin32(FrameColor);
+        var textColor = ColorTranslator.ToWin32(FrameTextColor);
+        var valueSize = Marshal.SizeOf<int>();
+
+        NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmUseImmersiveDarkMode, ref enabled, valueSize);
+        NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmWindowCornerPreference, ref roundedCorners, valueSize);
+        NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmBorderColor, ref borderColor, valueSize);
+        NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmCaptionColor, ref captionColor, valueSize);
+        NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmTextColor, ref textColor, valueSize);
+    }
+
     private static void OpenExternal(string uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) ||
@@ -255,6 +367,7 @@ internal sealed class MainForm : Form
 
         if (_webView.CoreWebView2 is not null)
         {
+            _webView.CoreWebView2.WindowCloseRequested -= HandleWindowCloseRequested;
             _webView.CoreWebView2.NavigationStarting -= HandleNavigationStarting;
 #if DEBUG
             _webView.CoreWebView2.NavigationCompleted -= HandleDebugNavigationCompleted;

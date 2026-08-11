@@ -7,6 +7,24 @@ namespace KevinZonda.KTerm.Interop;
 
 internal static class NativeMethods
 {
+    internal const int WindowStyleIndex = -16;
+    internal const nint WindowStylePopup = unchecked((int)0x8000_0000);
+    internal const nint WindowStyleCaption = 0x00C0_0000;
+    internal const nint WindowStyleSystemMenu = 0x0008_0000;
+    internal const nint WindowStyleThickFrame = 0x0004_0000;
+    internal const nint WindowStyleMinimizeBox = 0x0002_0000;
+    internal const nint WindowStyleMaximizeBox = 0x0001_0000;
+    internal const uint SetWindowPositionNoSize = 0x0001;
+    internal const uint SetWindowPositionNoMove = 0x0002;
+    internal const uint SetWindowPositionNoZOrder = 0x0004;
+    internal const uint SetWindowPositionNoActivate = 0x0010;
+    internal const uint SetWindowPositionFrameChanged = 0x0020;
+    internal const int DwmUseImmersiveDarkMode = 20;
+    internal const int DwmWindowCornerPreference = 33;
+    internal const int DwmBorderColor = 34;
+    internal const int DwmCaptionColor = 35;
+    internal const int DwmTextColor = 36;
+
     internal const uint ExtendedStartupInfoPresent = 0x0008_0000;
     internal const uint CreateUnicodeEnvironment = 0x0000_0400;
     internal const uint WaitObject0 = 0x0000_0000;
@@ -139,7 +157,44 @@ internal static class NativeMethods
     [DllImport("kernel32.dll")]
     internal static extern int ResizePseudoConsole(IntPtr hPC, Coord size);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLong32(IntPtr hWnd, int index);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern nint GetWindowLongPtr64(IntPtr hWnd, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr hWnd, int index, int newValue);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern nint SetWindowLongPtr64(IntPtr hWnd, int index, nint newValue);
+
+    internal static nint GetWindowLongPtr(IntPtr hWnd, int index) =>
+        IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, index) : GetWindowLong32(hWnd, index);
+
+    internal static nint SetWindowLongPtr(IntPtr hWnd, int index, nint newValue) =>
+        IntPtr.Size == 8
+            ? SetWindowLongPtr64(hWnd, index, newValue)
+            : SetWindowLong32(hWnd, index, newValue.ToInt32());
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmSetWindowAttribute(
+        IntPtr hWnd,
+        int attribute,
+        ref int value,
+        int valueSize);
+
     internal static Win32Exception LastError(string operation) =>
         new(Marshal.GetLastWin32Error(), operation);
 }
-

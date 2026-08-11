@@ -35,12 +35,15 @@ button {
   align-items: stretch;
   min-width: 0;
   padding: 4px 5px 0;
+  padding-right: max(5px, calc(100vw - env(titlebar-area-width, 100vw)));
   gap: 3px;
   overflow-x: auto;
   overflow-y: hidden;
   background: #171b22;
   border-bottom: 1px solid #272d37;
   scrollbar-width: thin;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 .tab {
@@ -68,6 +71,13 @@ button {
   border: 0;
   background: transparent;
   cursor: default;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.tab {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .tab-activate {
