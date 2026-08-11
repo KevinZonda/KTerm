@@ -280,11 +280,12 @@ internal sealed class SettingsForm : Form
         _shellArguments.Margin = new Padding(0, 5, 0, 12);
         layout.Controls.Add(_shellArguments, 0, 5);
 
-        var note = CreateLabel(
-            "For profiles other than Auto, enter the executable path manually. " +
-            "Changes apply to new tabs and splits.");
-        note.Dock = DockStyle.Top;
-        layout.Controls.Add(note, 0, 6);
+        layout.Controls.Add(new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = SurfaceColor,
+            Margin = new Padding(0)
+        }, 0, 6);
         page.Controls.Add(layout);
         return page;
     }
