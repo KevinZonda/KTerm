@@ -30,7 +30,7 @@ KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。�
 
 - Windows 10 1903 或更高版本
 - .NET 10 SDK
-- Node.js 与 npm
+- Node.js 与 pnpm
 - Microsoft Edge WebView2 Evergreen Runtime
 
 ```powershell
@@ -38,7 +38,7 @@ dotnet build KevinZonda.KTerm.slnx
 dotnet run --project src\KevinZonda.KTerm\KevinZonda.KTerm.csproj
 ```
 
-`.csproj` 会执行前端的 `npm ci`（首次）和 `npm run build`，随后把 Vite 产物复制到应用输出目录的 `wwwroot`。
+`.csproj` 会执行前端的 `pnpm install --frozen-lockfile`（首次）和 `pnpm run build`，随后把 Vite 产物嵌入应用程序集。
 
 运行 Debug 端到端 smoke test（自动创建两个 Tab，并在活动 Tab 构造 2×2）：
 

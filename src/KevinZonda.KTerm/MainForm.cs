@@ -33,6 +33,7 @@ internal sealed class MainForm : Form
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions = new();
     private WebViewBridge? _bridge;
+    private CoreWebView2Environment? _webViewEnvironment;
     private CoreWebView2WindowControlsOverlay? _windowControlsOverlay;
     private bool _initialized;
     private bool _wasInNonNormalWindowState;
@@ -241,13 +242,6 @@ internal sealed class MainForm : Form
 
     private async Task InitializeWebView()
     {
-        var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-        var indexFile = Path.Combine(webRoot, "index.html");
-        if (!File.Exists(indexFile))
-        {
-            throw new FileNotFoundException("The KTerm web assets are missing.", indexFile);
-        }
-
         var userDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "KTerm",
@@ -257,13 +251,14 @@ internal sealed class MainForm : Form
         var environment = await CoreWebView2Environment.CreateAsync(
             browserExecutableFolder: null,
             userDataFolder: userDataFolder);
+        _webViewEnvironment = environment;
         await _webView.EnsureCoreWebView2Async(environment);
 
         var core = _webView.CoreWebView2;
-        core.SetVirtualHostNameToFolderMapping(
-            AppHostName,
-            webRoot,
-            CoreWebView2HostResourceAccessKind.DenyCors);
+        core.AddWebResourceRequestedFilter(
+            $"https://{AppHostName}/*",
+            CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += HandleWebResourceRequested;
 
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
@@ -287,6 +282,52 @@ internal sealed class MainForm : Form
         _bridge = new WebViewBridge(_webView, _sessions, BeginWindowResize);
 
         core.Navigate($"https://{AppHostName}/index.html");
+    }
+
+    private void HandleWebResourceRequested(
+        object? sender,
+        CoreWebView2WebResourceRequestedEventArgs eventArgs)
+    {
+        var environment = _webViewEnvironment;
+        if (environment is null ||
+            !Uri.TryCreate(eventArgs.Request.Uri, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(uri.Host, AppHostName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!string.Equals(eventArgs.Request.Method, "GET", StringComparison.OrdinalIgnoreCase))
+        {
+            eventArgs.Response = environment.CreateWebResourceResponse(
+                Stream.Null,
+                405,
+                "Method Not Allowed",
+                "Allow: GET");
+            return;
+        }
+
+        var requestPath = Uri.UnescapeDataString(uri.AbsolutePath);
+        if (!EmbeddedWebAssets.TryOpen(requestPath, out var content, out var contentType) ||
+            content is null)
+        {
+            eventArgs.Response = environment.CreateWebResourceResponse(
+                Stream.Null,
+                404,
+                "Not Found",
+                "Content-Type: text/plain; charset=utf-8");
+            return;
+        }
+
+        var cacheControl = EmbeddedWebAssets.IsImmutable(requestPath)
+            ? "public, max-age=31536000, immutable"
+            : "no-store";
+        var headers =
+            $"Content-Type: {contentType}\r\n" +
+            $"Content-Length: {content.Length}\r\n" +
+            $"Cache-Control: {cacheControl}\r\n" +
+            "X-Content-Type-Options: nosniff";
+        eventArgs.Response = environment.CreateWebResourceResponse(content, 200, "OK", headers);
     }
 
 #if DEBUG
@@ -517,6 +558,7 @@ internal sealed class MainForm : Form
         {
             _webView.CoreWebView2.WindowCloseRequested -= HandleWindowCloseRequested;
             _webView.CoreWebView2.NavigationStarting -= HandleNavigationStarting;
+            _webView.CoreWebView2.WebResourceRequested -= HandleWebResourceRequested;
 #if DEBUG
             _webView.CoreWebView2.NavigationCompleted -= HandleDebugNavigationCompleted;
 #endif

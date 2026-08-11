@@ -11,24 +11,24 @@ CONFIG ?= Debug
 
 help:
 	@echo "Available targets:"
-	@echo "  make install   - restore NuGet and npm dependencies"
+	@echo "  make install   - restore NuGet and pnpm dependencies"
 	@echo "  make web       - type-check and build the web frontend"
 	@echo "  make build     - build KTerm; CONFIG=Debug by default"
 	@echo "  make run       - build and run KTerm"
 	@echo "  make test      - run the 2x2 ConPTY smoke test"
 	@echo "  make format    - verify C# formatting"
-	@echo "  make audit     - audit NuGet and npm dependencies"
-	@echo "  make publish   - publish ReadyToRun framework-dependent win-x64"
+	@echo "  make audit     - audit NuGet and pnpm dependencies"
+	@echo "  make publish   - publish ReadyToRun single-file win-x64"
 	@echo "  make clean     - clean .NET build outputs"
 
 install: restore
-	npm ci --prefix $(WEB_DIR)
+	pnpm --dir $(WEB_DIR) install --frozen-lockfile
 
 restore:
 	dotnet restore $(SOLUTION) --nologo
 
 web:
-	npm run build --prefix $(WEB_DIR)
+	pnpm --dir $(WEB_DIR) run build
 
 build:
 	dotnet build $(SOLUTION) -c $(CONFIG) --nologo
@@ -44,10 +44,10 @@ format:
 
 audit:
 	dotnet list $(PROJECT) package --vulnerable --include-transitive
-	npm audit --prefix $(WEB_DIR) --audit-level=high
+	pnpm --dir $(WEB_DIR) audit --audit-level high
 
 publish:
-	dotnet publish $(PROJECT) -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true --nologo
+	dotnet publish $(PROJECT) -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -p:PublishSingleFile=true --nologo
 
 clean:
 	dotnet clean $(SOLUTION) -c $(CONFIG) --nologo
