@@ -22,6 +22,11 @@ internal static class NativeMethods
     internal const uint CreateUnicodeEnvironment = 0x0000_0400;
     internal const uint WaitObject0 = 0x0000_0000;
     internal const uint WaitTimeout = 0x0000_0102;
+    internal const uint GenericRead = 0x8000_0000;
+    internal const uint GenericWrite = 0x4000_0000;
+    internal const uint FileShareRead = 0x0000_0001;
+    internal const uint FileShareWrite = 0x0000_0002;
+    internal const uint OpenExisting = 3;
     internal const nuint ProcThreadAttributePseudoConsole = 0x0002_0016;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -35,6 +40,31 @@ internal static class NativeMethods
             X = checked((short)columns);
             Y = checked((short)rows);
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct SmallRect
+    {
+        internal short Left;
+        internal short Top;
+        internal short Right;
+        internal short Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct ConsoleScreenBufferInfoEx
+    {
+        internal uint cbSize;
+        internal Coord dwSize;
+        internal Coord dwCursorPosition;
+        internal ushort wAttributes;
+        internal SmallRect srWindow;
+        internal Coord dwMaximumWindowSize;
+        internal ushort wPopupAttributes;
+        [MarshalAs(UnmanagedType.Bool)]
+        internal bool bFullscreenSupported;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+        internal uint[] ColorTable;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -83,6 +113,36 @@ internal static class NativeMethods
         out SafeFileHandle hWritePipe,
         IntPtr lpPipeAttributes,
         uint nSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AttachConsole(uint dwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool FreeConsole();
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern SafeFileHandle CreateFileW(
+        string lpFileName,
+        uint dwDesiredAccess,
+        uint dwShareMode,
+        IntPtr lpSecurityAttributes,
+        uint dwCreationDisposition,
+        uint dwFlagsAndAttributes,
+        IntPtr hTemplateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetConsoleScreenBufferInfoEx(
+        SafeFileHandle hConsoleOutput,
+        ref ConsoleScreenBufferInfoEx lpConsoleScreenBufferInfoEx);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetConsoleScreenBufferInfoEx(
+        SafeFileHandle hConsoleOutput,
+        ref ConsoleScreenBufferInfoEx lpConsoleScreenBufferInfoEx);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

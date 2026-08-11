@@ -7,7 +7,7 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, TerminalSession> _sessions = new();
     private readonly object _prewarmLock = new();
-    private ShellSettings _shellSettings;
+    private AppSettings _settings;
     private Task<TerminalSession>? _prewarmedSession;
     private int _disposed;
 
@@ -15,9 +15,9 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 
     internal event Action<string, uint>? SessionExited;
 
-    internal TerminalSessionManager(ShellSettings shellSettings)
+    internal TerminalSessionManager(AppSettings settings)
     {
-        _shellSettings = ShellSettings.Normalize(shellSettings);
+        _settings = settings;
     }
 
     internal void Prewarm(int columns, int rows)
@@ -35,12 +35,13 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
             }
 
             var id = Guid.NewGuid().ToString("N");
-            var shellSettings = _shellSettings;
+            var settings = _settings;
             _prewarmedSession = Task.Run(() => TerminalSession.Start(
                 id,
                 columns,
                 rows,
-                ShellProfileCatalog.Resolve(shellSettings)));
+                ShellProfileCatalog.Resolve(settings.Shell),
+                TerminalThemeCatalog.Find(settings.Theme.Name)));
         }
     }
 
@@ -49,14 +50,15 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var prewarmedSession = TakePrewarmedSession();
-        var shellSettings = GetShellSettings();
+        var settings = GetSettings();
         var session = prewarmedSession is not null
             ? await prewarmedSession.ConfigureAwait(false)
             : await Task.Run(() => TerminalSession.Start(
                 Guid.NewGuid().ToString("N"),
                 columns,
                 rows,
-                ShellProfileCatalog.Resolve(shellSettings))).ConfigureAwait(false);
+                ShellProfileCatalog.Resolve(settings.Shell),
+                TerminalThemeCatalog.Find(settings.Theme.Name))).ConfigureAwait(false);
 
         if (Volatile.Read(ref _disposed) != 0)
         {
@@ -99,20 +101,19 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
             session.ProcessId);
     }
 
-    internal async Task UpdateShellAsync(ShellSettings shellSettings)
+    internal async Task UpdateSettingsAsync(AppSettings settings)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        var normalized = ShellSettings.Normalize(shellSettings);
         Task<TerminalSession>? previousPrewarm;
         lock (_prewarmLock)
         {
-            if (_shellSettings == normalized)
+            if (_settings.Shell == settings.Shell && _settings.Theme == settings.Theme)
             {
                 return;
             }
 
-            _shellSettings = normalized;
+            _settings = settings;
             previousPrewarm = _prewarmedSession;
             _prewarmedSession = null;
         }
@@ -123,11 +124,11 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
         }
     }
 
-    private ShellSettings GetShellSettings()
+    private AppSettings GetSettings()
     {
         lock (_prewarmLock)
         {
-            return _shellSettings;
+            return _settings;
         }
     }
 

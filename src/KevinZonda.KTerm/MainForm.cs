@@ -31,7 +31,7 @@ internal sealed class MainForm : Form
     internal MainForm()
     {
         _settings = _settingsStore.Load();
-        _sessions = new TerminalSessionManager(_settings.Shell);
+        _sessions = new TerminalSessionManager(_settings);
         Text = "KTerm";
         BackColor = Color.FromArgb(12, 15, 20);
         ClientSize = new Size(1100, 720);
@@ -427,7 +427,7 @@ internal sealed class MainForm : Form
             try
             {
                 _settings = await _settingsStore.SaveAsync(settingsForm.Settings);
-                await _sessions.UpdateShellAsync(_settings.Shell);
+                await _sessions.UpdateSettingsAsync(_settings);
                 _sessions.Prewarm(80, 24);
                 _bridge?.SendSettingsChanged(_settings);
             }

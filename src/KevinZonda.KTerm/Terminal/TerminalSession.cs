@@ -10,6 +10,7 @@ namespace KevinZonda.KTerm.Terminal;
 internal sealed class TerminalSession : IAsyncDisposable
 {
     private const int BufferSize = 16 * 1024;
+    private static readonly object ConsoleAttachmentLock = new();
 
     private readonly FileStream _input;
     private readonly FileStream _output;
@@ -72,7 +73,8 @@ internal sealed class TerminalSession : IAsyncDisposable
         string id,
         int columns,
         int rows,
-        ShellLaunchSpec shell)
+        ShellLaunchSpec shell,
+        TerminalThemePreset theme)
     {
         columns = Math.Clamp(columns, 2, short.MaxValue);
         rows = Math.Clamp(rows, 1, short.MaxValue);
@@ -170,6 +172,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
             _ = NativeMethods.CloseHandle(processInformation.hThread);
             process = new SafeKernelHandle(processInformation.hProcess);
+            ApplyConsoleTheme(processInformation.dwProcessId, theme);
             inputStream = new FileStream(hostInput, FileAccess.Write, BufferSize, isAsync: false);
             outputStream = new FileStream(hostOutput, FileAccess.Read, BufferSize, isAsync: false);
 
@@ -209,6 +212,78 @@ internal sealed class TerminalSession : IAsyncDisposable
                 Marshal.FreeHGlobal(environmentBlock);
             }
         }
+    }
+
+    private static void ApplyConsoleTheme(uint processId, TerminalThemePreset theme)
+    {
+        lock (ConsoleAttachmentLock)
+        {
+            _ = NativeMethods.FreeConsole();
+
+            var attached = false;
+            for (var attempt = 0; attempt < 10 && !attached; attempt++)
+            {
+                attached = NativeMethods.AttachConsole(processId);
+                if (!attached)
+                {
+                    Thread.Sleep(5);
+                }
+            }
+
+            if (!attached)
+            {
+                return;
+            }
+
+            try
+            {
+                using var output = NativeMethods.CreateFileW(
+                    "CONOUT$",
+                    NativeMethods.GenericRead | NativeMethods.GenericWrite,
+                    NativeMethods.FileShareRead | NativeMethods.FileShareWrite,
+                    IntPtr.Zero,
+                    NativeMethods.OpenExisting,
+                    0,
+                    IntPtr.Zero);
+                if (output.IsInvalid)
+                {
+                    return;
+                }
+
+                var info = new NativeMethods.ConsoleScreenBufferInfoEx
+                {
+                    cbSize = (uint)Marshal.SizeOf<NativeMethods.ConsoleScreenBufferInfoEx>(),
+                    ColorTable = new uint[16]
+                };
+                if (!NativeMethods.GetConsoleScreenBufferInfoEx(output, ref info))
+                {
+                    return;
+                }
+
+                const int backgroundIndex = 0;
+                const int foregroundIndex = 7;
+                info.ColorTable[backgroundIndex] = ToColorRef(theme.Background);
+                info.ColorTable[foregroundIndex] = ToColorRef(theme.Foreground);
+                info.wAttributes = (ushort)((backgroundIndex << 4) | foregroundIndex);
+
+                // SetConsoleScreenBufferInfoEx interprets this rectangle as exclusive even
+                // though its getter returns inclusive coordinates. Compensate so applying a
+                // palette does not shrink the ConPTY viewport by one row and column.
+                info.srWindow.Right++;
+                info.srWindow.Bottom++;
+                _ = NativeMethods.SetConsoleScreenBufferInfoEx(output, ref info);
+            }
+            finally
+            {
+                _ = NativeMethods.FreeConsole();
+            }
+        }
+    }
+
+    private static uint ToColorRef(string htmlColor)
+    {
+        var color = ColorTranslator.FromHtml(htmlColor);
+        return color.R | ((uint)color.G << 8) | ((uint)color.B << 16);
     }
 
     private static IntPtr CreateShellEnvironmentBlock(ShellLaunchSpec shell)
