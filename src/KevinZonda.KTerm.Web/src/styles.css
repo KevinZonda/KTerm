@@ -28,44 +28,12 @@ button {
 
 #app {
   display: grid;
-  grid-template-rows: env(titlebar-area-height, 36px) 1px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: #272d37;
 }
 
-#native-bar {
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  padding: 0 12px;
-  padding-right: max(12px, calc(100vw - env(titlebar-area-width, 100vw)));
-  background: #171b22;
-  border-bottom: 1px solid #303845;
-  user-select: none;
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
-.app-mark {
-  width: 12px;
-  height: 12px;
-  margin-right: 8px;
-  border: 1px solid #8fa8c5;
-  border-radius: 2px;
-  background: #5e81ac;
-  box-shadow: 3px 3px 0 -1px #171b22, 3px 3px 0 #8fa8c5;
-}
-
-.app-title {
-  overflow: hidden;
-  color: #c9d3df;
-  font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 #workspace {
-  grid-row: 3;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -274,79 +242,6 @@ button {
 #status.error {
   border-color: #bf616a;
   color: #ffccd0;
-}
-
-.window-resize-handle {
-  position: fixed;
-  z-index: 100;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
-.window-resize-top,
-.window-resize-bottom {
-  right: 10px;
-  left: 10px;
-  height: 6px;
-}
-
-.window-resize-top {
-  top: 0;
-  cursor: n-resize;
-}
-
-.window-resize-bottom {
-  bottom: 0;
-  cursor: s-resize;
-}
-
-.window-resize-left,
-.window-resize-right {
-  top: 10px;
-  bottom: 10px;
-  width: 6px;
-}
-
-.window-resize-left {
-  left: 0;
-  cursor: w-resize;
-}
-
-.window-resize-right {
-  right: 0;
-  cursor: e-resize;
-}
-
-.window-resize-top-left,
-.window-resize-top-right,
-.window-resize-bottom-left,
-.window-resize-bottom-right {
-  width: 10px;
-  height: 10px;
-}
-
-.window-resize-top-left {
-  top: 0;
-  left: 0;
-  cursor: nw-resize;
-}
-
-.window-resize-top-right {
-  top: 0;
-  right: 0;
-  cursor: ne-resize;
-}
-
-.window-resize-bottom-left {
-  bottom: 0;
-  left: 0;
-  cursor: sw-resize;
-}
-
-.window-resize-bottom-right {
-  right: 0;
-  bottom: 0;
-  cursor: se-resize;
 }
 
 .empty-state,

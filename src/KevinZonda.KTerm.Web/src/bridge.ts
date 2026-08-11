@@ -85,10 +85,6 @@ export class NativeBridge {
     this.send('session.close', {}, sessionId);
   }
 
-  public beginWindowResize(edge: string): void {
-    this.send('window.resize', { edge });
-  }
-
   public openSettings(): void {
     this.send('window.settings', {});
   }

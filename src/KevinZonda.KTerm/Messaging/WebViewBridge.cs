@@ -16,7 +16,6 @@ internal sealed class WebViewBridge : IDisposable
 
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
-    private readonly Action<string> _beginWindowResize;
     private readonly Action _openSettings;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _outputQueues = new();
     private readonly System.Windows.Forms.Timer _outputTimer;
@@ -26,13 +25,11 @@ internal sealed class WebViewBridge : IDisposable
     internal WebViewBridge(
         WebView2 webView,
         TerminalSessionManager sessions,
-        Action<string> beginWindowResize,
         Action openSettings,
         AppSettings settings)
     {
         _webView = webView;
         _sessions = sessions;
-        _beginWindowResize = beginWindowResize;
         _openSettings = openSettings;
         _settings = settings;
         _sessions.OutputReceived += QueueOutput;
@@ -116,10 +113,6 @@ internal sealed class WebViewBridge : IDisposable
                     {
                         Clipboard.SetText(text);
                     }
-                    break;
-
-                case "window.resize":
-                    _beginWindowResize(GetString(message.Payload, "edge"));
                     break;
 
                 case "window.settings":

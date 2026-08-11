@@ -374,9 +374,10 @@ WebView2 进程模型包括 browser、renderer 和 GPU 等进程。单个页面�
 
 ## 12. MVP 周边设施
 
-### 12.1 Native Bar 与 Pane Tab Strip
+### 12.1 Windows 标题栏与 Pane Tab Strip
 
-- Web UI 顶部保留独立的 Native Bar，只承载窗口拖动区域和系统窗口按钮。
+- 主窗体使用 Windows 原生标题栏，由系统负责窗口菜单、拖动、Resize、贴边和 Snap Layout。
+- WebView2 只占据原生标题栏下方的客户区，不再绘制 HTML 标题栏或窗口 resize handles。
 - Split Tree 的叶节点是 Pane；每个 Pane 拥有自己的 Tab Strip 和一组 Terminal session。
 - Tab 标题初始为 Shell 名称，并随对应 session 报告的 title 更新。
 - `Alt+T` 在当前聚焦 Pane 内创建并切换到新 Tab。
