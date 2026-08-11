@@ -173,11 +173,12 @@ button {
   padding: 5px 4px 3px 7px;
   overflow: hidden;
   background: #0c0f14;
-  box-shadow: inset 0 0 0 1px transparent;
+  outline: 1px solid transparent;
+  outline-offset: -2px;
 }
 
 .terminal-pane.focused {
-  box-shadow: inset 0 0 0 1px #5e81ac;
+  outline-color: #5e81ac;
 }
 
 .terminal-pane.exited {
