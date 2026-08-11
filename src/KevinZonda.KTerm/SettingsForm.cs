@@ -18,7 +18,14 @@ internal sealed class SettingsForm : Form
     private readonly Label _preview = new();
     private readonly ComboBox _themeName = new();
     private readonly Panel _themePreview = new();
+    private readonly TabControl _tabs = new();
+    private readonly ComboBox _shellProfile = new();
+    private readonly TextBox _shellExecutable = new();
+    private readonly TextBox _shellArguments = new();
+    private readonly Button _shellBrowse = new();
     private readonly List<Font> _previewFonts = [];
+    private TabPage? _shellPage;
+    private bool _applyingShellValues;
 
     internal SettingsForm(AppSettings settings)
     {
@@ -37,6 +44,7 @@ internal sealed class SettingsForm : Form
         Controls.Add(CreateLayout());
         PopulateFonts();
         PopulateThemes();
+        PopulateShellProfiles();
         ApplyValues(settings);
         UpdatePreview();
     }
@@ -52,7 +60,8 @@ internal sealed class SettingsForm : Form
         Theme = new ThemeSettings
         {
             Name = _themeName.Text
-        }
+        },
+        Shell = SelectedShellSettings()
     });
 
     protected override void OnHandleCreated(EventArgs eventArgs)
@@ -81,6 +90,33 @@ internal sealed class SettingsForm : Form
         }
     }
 
+    protected override void OnFormClosing(FormClosingEventArgs eventArgs)
+    {
+        var shell = SelectedShellSettings();
+        if (DialogResult == DialogResult.OK && shell.Profile != ShellProfileCatalog.AutoId)
+        {
+            var executable = Environment.ExpandEnvironmentVariables(shell.Executable ?? string.Empty);
+            if (!Path.IsPathFullyQualified(executable) || !File.Exists(executable))
+            {
+                eventArgs.Cancel = true;
+                if (_shellPage is not null)
+                {
+                    _tabs.SelectedTab = _shellPage;
+                }
+
+                MessageBox.Show(
+                    this,
+                    "Enter the full path to an existing shell executable, or choose one with Browse.",
+                    "KTerm shell settings",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+        }
+
+        base.OnFormClosing(eventArgs);
+    }
+
     private Control CreateLayout()
     {
         var root = new TableLayoutPanel
@@ -94,14 +130,13 @@ internal sealed class SettingsForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var tabs = new TabControl
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 0, 14)
-        };
-        tabs.TabPages.Add(CreateFontPage());
-        tabs.TabPages.Add(CreateThemePage());
-        root.Controls.Add(tabs, 0, 0);
+        _tabs.Dock = DockStyle.Fill;
+        _tabs.Margin = new Padding(0, 0, 0, 14);
+        _tabs.TabPages.Add(CreateFontPage());
+        _tabs.TabPages.Add(CreateThemePage());
+        _shellPage = CreateShellPage();
+        _tabs.TabPages.Add(_shellPage);
+        root.Controls.Add(_tabs, 0, 0);
         root.Controls.Add(CreateActions(), 0, 1);
 
         _fontFamily.TextChanged += (_, _) => UpdatePreview();
@@ -180,6 +215,76 @@ internal sealed class SettingsForm : Form
         _preview.AutoEllipsis = true;
         previewPanel.Controls.Add(_preview);
         layout.Controls.Add(previewPanel, 0, 1);
+        page.Controls.Add(layout);
+        return page;
+    }
+
+    private TabPage CreateShellPage()
+    {
+        var page = new TabPage("Shell")
+        {
+            BackColor = SurfaceColor,
+            ForeColor = ForeColor,
+            Padding = new Padding(16),
+            UseVisualStyleBackColor = false
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 7,
+            BackColor = SurfaceColor,
+            Margin = new Padding(0)
+        };
+        for (var row = 0; row < 6; row++)
+        {
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(CreateLabel("Shell profile"), 0, 0);
+
+        ConfigureField(_shellProfile);
+        _shellProfile.DropDownStyle = ComboBoxStyle.DropDownList;
+        _shellProfile.DisplayMember = nameof(ShellProfileDefinition.DisplayName);
+        _shellProfile.Margin = new Padding(0, 5, 0, 12);
+        _shellProfile.SelectedIndexChanged += (_, _) => HandleShellProfileChanged();
+        layout.Controls.Add(_shellProfile, 0, 1);
+
+        layout.Controls.Add(CreateLabel("Executable"), 0, 2);
+        var executableRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0, 5, 0, 12)
+        };
+        executableRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        executableRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        ConfigureField(_shellExecutable);
+        _shellExecutable.MaxLength = 1_024;
+        _shellExecutable.Margin = new Padding(0, 0, 6, 0);
+        executableRow.Controls.Add(_shellExecutable, 0, 0);
+        ConfigureButton(_shellBrowse, "Browse...");
+        _shellBrowse.Size = new Size(88, 28);
+        _shellBrowse.Margin = new Padding(0);
+        _shellBrowse.Click += (_, _) => BrowseForShell();
+        executableRow.Controls.Add(_shellBrowse, 1, 0);
+        layout.Controls.Add(executableRow, 0, 3);
+
+        layout.Controls.Add(CreateLabel("Arguments"), 0, 4);
+        ConfigureField(_shellArguments);
+        _shellArguments.MaxLength = 4_096;
+        _shellArguments.Margin = new Padding(0, 5, 0, 12);
+        layout.Controls.Add(_shellArguments, 0, 5);
+
+        var note = CreateLabel(
+            "For profiles other than Auto, enter the executable path manually. " +
+            "Changes apply to new tabs and splits.");
+        note.Dock = DockStyle.Top;
+        layout.Controls.Add(note, 0, 6);
         page.Controls.Add(layout);
         return page;
     }
@@ -282,6 +387,11 @@ internal sealed class SettingsForm : Form
             .ToArray());
     }
 
+    private void PopulateShellProfiles()
+    {
+        _shellProfile.Items.AddRange(ShellProfileCatalog.All.Cast<object>().ToArray());
+    }
+
     private void ApplyValues(AppSettings settings)
     {
         var normalized = AppSettings.Normalize(settings);
@@ -292,6 +402,88 @@ internal sealed class SettingsForm : Form
         if (_themeName.SelectedIndex < 0)
         {
             _themeName.SelectedIndex = 0;
+        }
+
+        ApplyShellValues(normalized.Shell);
+    }
+
+    private void ApplyShellValues(ShellSettings settings)
+    {
+        var normalized = ShellSettings.Normalize(settings);
+        var profile = ShellProfileCatalog.Find(normalized.Profile);
+        _applyingShellValues = true;
+        try
+        {
+            _shellProfile.SelectedItem = _shellProfile.Items
+                .Cast<ShellProfileDefinition>()
+                .First(candidate => candidate.Id == profile.Id);
+            _shellExecutable.Text = profile.Id == ShellProfileCatalog.AutoId
+                ? string.Empty
+                : normalized.Executable ?? string.Empty;
+            _shellArguments.Text = normalized.Arguments ?? profile.DefaultArguments;
+            _shellExecutable.ReadOnly = profile.Id == ShellProfileCatalog.AutoId;
+            _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
+        }
+        finally
+        {
+            _applyingShellValues = false;
+        }
+    }
+
+    private void HandleShellProfileChanged()
+    {
+        if (_applyingShellValues || _shellProfile.SelectedItem is not ShellProfileDefinition profile)
+        {
+            return;
+        }
+
+        _applyingShellValues = true;
+        try
+        {
+            _shellExecutable.ReadOnly = profile.Id == ShellProfileCatalog.AutoId;
+            _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
+            _shellExecutable.Clear();
+            _shellArguments.Text = profile.DefaultArguments;
+        }
+        finally
+        {
+            _applyingShellValues = false;
+        }
+    }
+
+    private ShellProfileDefinition SelectedShellProfile() =>
+        _shellProfile.SelectedItem as ShellProfileDefinition ?? ShellProfileCatalog.All[0];
+
+    private ShellSettings SelectedShellSettings()
+    {
+        var profile = SelectedShellProfile();
+        return new ShellSettings
+        {
+            Profile = profile.Id,
+            Executable = profile.Id == ShellProfileCatalog.AutoId ? null : _shellExecutable.Text,
+            Arguments = profile.Id == ShellProfileCatalog.AutoId
+                ? null
+                : _shellArguments.Text
+        };
+    }
+
+    private void BrowseForShell()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Select shell executable",
+            Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (File.Exists(_shellExecutable.Text))
+        {
+            dialog.FileName = _shellExecutable.Text;
+        }
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            _shellExecutable.Text = dialog.FileName;
         }
     }
 
@@ -377,6 +569,14 @@ internal sealed class SettingsForm : Form
         field.FlatStyle = FlatStyle.Flat;
     }
 
+    private static void ConfigureField(TextBox field)
+    {
+        field.Dock = DockStyle.Fill;
+        field.BackColor = FieldColor;
+        field.ForeColor = Color.FromArgb(229, 233, 240);
+        field.BorderStyle = BorderStyle.FixedSingle;
+    }
+
     private static void ConfigureNumber(
         NumericUpDown field,
         decimal minimum,
@@ -396,17 +596,20 @@ internal sealed class SettingsForm : Form
 
     private static Button CreateButton(string text, bool primary = false)
     {
-        var button = new Button
-        {
-            AutoSize = false,
-            Size = new Size(primary ? 84 : 112, 34),
-            Text = text,
-            BackColor = primary ? PrimaryColor : Color.FromArgb(37, 44, 54),
-            ForeColor = Color.FromArgb(229, 233, 240),
-            FlatStyle = FlatStyle.Flat,
-            Margin = new Padding(6, 0, 0, 0)
-        };
-        button.FlatAppearance.BorderColor = primary ? Color.FromArgb(98, 137, 184) : BorderColor;
+        var button = new Button();
+        ConfigureButton(button, text, primary);
+        button.Size = new Size(primary ? 84 : 112, 34);
+        button.Margin = new Padding(6, 0, 0, 0);
         return button;
+    }
+
+    private static void ConfigureButton(Button button, string text, bool primary = false)
+    {
+        button.AutoSize = false;
+        button.Text = text;
+        button.BackColor = primary ? PrimaryColor : Color.FromArgb(37, 44, 54);
+        button.ForeColor = Color.FromArgb(229, 233, 240);
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderColor = primary ? Color.FromArgb(98, 137, 184) : BorderColor;
     }
 }

@@ -32,7 +32,7 @@ internal sealed class MainForm : Form
     private static readonly Color FrameTextColor = Color.FromArgb(216, 222, 233);
 
     private readonly WebView2 _webView;
-    private readonly TerminalSessionManager _sessions = new();
+    private readonly TerminalSessionManager _sessions;
     private readonly SettingsStore _settingsStore = new();
     private AppSettings _settings;
     private WebViewBridge? _bridge;
@@ -49,6 +49,7 @@ internal sealed class MainForm : Form
     internal MainForm()
     {
         _settings = _settingsStore.Load();
+        _sessions = new TerminalSessionManager(_settings.Shell);
         Text = "KTerm";
         BackColor = Color.FromArgb(12, 15, 20);
         ClientSize = new Size(1100, 720);
@@ -603,6 +604,8 @@ internal sealed class MainForm : Form
             try
             {
                 _settings = await _settingsStore.SaveAsync(settingsForm.Settings);
+                await _sessions.UpdateShellAsync(_settings.Shell);
+                _sessions.Prewarm(80, 24);
                 _bridge?.SendSettingsChanged(_settings);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

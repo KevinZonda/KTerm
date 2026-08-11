@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Runtime.InteropServices;
 using System.Text;
+using KevinZonda.KTerm.Configuration;
 using KevinZonda.KTerm.Interop;
 using Microsoft.Win32.SafeHandles;
 
@@ -26,7 +27,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
     private TerminalSession(
         string id,
-        string shellPath,
+        string shellName,
         uint processId,
         FileStream input,
         FileStream output,
@@ -36,7 +37,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         int rows)
     {
         Id = id;
-        ShellPath = shellPath;
+        ShellName = shellName;
         ProcessId = processId;
         _input = input;
         _output = output;
@@ -48,7 +49,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
     internal string Id { get; }
 
-    internal string ShellPath { get; }
+    internal string ShellName { get; }
 
     internal uint ProcessId { get; }
 
@@ -67,7 +68,11 @@ internal sealed class TerminalSession : IAsyncDisposable
         _waitTask = Task.Run(WaitForExit);
     }
 
-    internal static TerminalSession Start(string id, int columns, int rows)
+    internal static TerminalSession Start(
+        string id,
+        int columns,
+        int rows,
+        ShellLaunchSpec shell)
     {
         columns = Math.Clamp(columns, 2, short.MaxValue);
         rows = Math.Clamp(rows, 1, short.MaxValue);
@@ -130,7 +135,6 @@ internal sealed class TerminalSession : IAsyncDisposable
                 throw NativeMethods.LastError("Unable to attach the pseudoconsole to the child process.");
             }
 
-            var shellPath = ResolveDefaultShell();
             var startupInfo = new NativeMethods.StartupInfoEx
             {
                 StartupInfo = new NativeMethods.StartupInfo
@@ -140,10 +144,15 @@ internal sealed class TerminalSession : IAsyncDisposable
                 lpAttributeList = attributeList
             };
 
-            var commandLine = new StringBuilder($"\"{shellPath}\"");
-            environmentBlock = CreateShellEnvironmentBlock();
+            var commandLine = new StringBuilder($"\"{shell.ExecutablePath}\"");
+            if (!string.IsNullOrWhiteSpace(shell.Arguments))
+            {
+                commandLine.Append(' ').Append(shell.Arguments);
+            }
+
+            environmentBlock = CreateShellEnvironmentBlock(shell);
             var created = NativeMethods.CreateProcessW(
-                shellPath,
+                shell.ExecutablePath,
                 commandLine,
                 IntPtr.Zero,
                 IntPtr.Zero,
@@ -156,7 +165,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
             if (!created)
             {
-                throw NativeMethods.LastError($"Unable to start shell '{shellPath}'.");
+                throw NativeMethods.LastError($"Unable to start shell '{shell.ExecutablePath}'.");
             }
 
             _ = NativeMethods.CloseHandle(processInformation.hThread);
@@ -166,7 +175,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
             return new TerminalSession(
                 id,
-                shellPath,
+                shell.DisplayName,
                 processInformation.dwProcessId,
                 inputStream,
                 outputStream,
@@ -202,7 +211,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
     }
 
-    private static IntPtr CreateShellEnvironmentBlock()
+    private static IntPtr CreateShellEnvironmentBlock(ShellLaunchSpec shell)
     {
         var environment = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
@@ -210,6 +219,14 @@ internal sealed class TerminalSession : IAsyncDisposable
             if (variable.Key is string name && variable.Value is string value)
             {
                 environment[name] = value;
+            }
+        }
+
+        if (shell.Environment is not null)
+        {
+            foreach (var variable in shell.Environment)
+            {
+                environment[variable.Key] = variable.Value;
             }
         }
 
@@ -367,55 +384,4 @@ internal sealed class TerminalSession : IAsyncDisposable
         _lifetime.Dispose();
     }
 
-    private static string ResolveDefaultShell()
-    {
-        foreach (var candidate in new[] { "pwsh.exe", "powershell.exe" })
-        {
-            var resolved = FindOnPath(candidate);
-            if (resolved is not null)
-            {
-                return resolved;
-            }
-        }
-
-        var commandProcessor = Environment.GetEnvironmentVariable("COMSPEC");
-        if (!string.IsNullOrWhiteSpace(commandProcessor) && File.Exists(commandProcessor))
-        {
-            return Path.GetFullPath(commandProcessor);
-        }
-
-        var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        if (File.Exists(cmd))
-        {
-            return cmd;
-        }
-
-        throw new FileNotFoundException("No supported command shell was found.");
-    }
-
-    private static string? FindOnPath(string fileName)
-    {
-        var pathValue = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(pathValue))
-        {
-            return null;
-        }
-
-        foreach (var pathEntry in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            try
-            {
-                var candidate = Path.GetFullPath(Path.Combine(pathEntry.Trim(), fileName));
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
-            }
-            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
-            {
-            }
-        }
-
-        return null;
-    }
 }

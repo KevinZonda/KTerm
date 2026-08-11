@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using KevinZonda.KTerm.Configuration;
 
 namespace KevinZonda.KTerm.Terminal;
 
@@ -6,12 +7,18 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, TerminalSession> _sessions = new();
     private readonly object _prewarmLock = new();
+    private ShellSettings _shellSettings;
     private Task<TerminalSession>? _prewarmedSession;
     private int _disposed;
 
     internal event Action<string, string>? OutputReceived;
 
     internal event Action<string, uint>? SessionExited;
+
+    internal TerminalSessionManager(ShellSettings shellSettings)
+    {
+        _shellSettings = ShellSettings.Normalize(shellSettings);
+    }
 
     internal void Prewarm(int columns, int rows)
     {
@@ -28,7 +35,12 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
             }
 
             var id = Guid.NewGuid().ToString("N");
-            _prewarmedSession = Task.Run(() => TerminalSession.Start(id, columns, rows));
+            var shellSettings = _shellSettings;
+            _prewarmedSession = Task.Run(() => TerminalSession.Start(
+                id,
+                columns,
+                rows,
+                ShellProfileCatalog.Resolve(shellSettings)));
         }
     }
 
@@ -37,12 +49,14 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var prewarmedSession = TakePrewarmedSession();
+        var shellSettings = GetShellSettings();
         var session = prewarmedSession is not null
             ? await prewarmedSession.ConfigureAwait(false)
             : await Task.Run(() => TerminalSession.Start(
                 Guid.NewGuid().ToString("N"),
                 columns,
-                rows)).ConfigureAwait(false);
+                rows,
+                ShellProfileCatalog.Resolve(shellSettings))).ConfigureAwait(false);
 
         if (Volatile.Read(ref _disposed) != 0)
         {
@@ -81,8 +95,40 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 
         return new TerminalSessionInfo(
             session.Id,
-            Path.GetFileNameWithoutExtension(session.ShellPath),
+            session.ShellName,
             session.ProcessId);
+    }
+
+    internal async Task UpdateShellAsync(ShellSettings shellSettings)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+        var normalized = ShellSettings.Normalize(shellSettings);
+        Task<TerminalSession>? previousPrewarm;
+        lock (_prewarmLock)
+        {
+            if (_shellSettings == normalized)
+            {
+                return;
+            }
+
+            _shellSettings = normalized;
+            previousPrewarm = _prewarmedSession;
+            _prewarmedSession = null;
+        }
+
+        if (previousPrewarm is not null)
+        {
+            await DisposePrewarmedSession(previousPrewarm).ConfigureAwait(false);
+        }
+    }
+
+    private ShellSettings GetShellSettings()
+    {
+        lock (_prewarmLock)
+        {
+            return _shellSettings;
+        }
     }
 
     private Task<TerminalSession>? TakePrewarmedSession()

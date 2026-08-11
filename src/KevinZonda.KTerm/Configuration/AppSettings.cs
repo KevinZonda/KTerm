@@ -11,6 +11,8 @@ internal sealed record AppSettings
 
     public ThemeSettings Theme { get; init; } = new();
 
+    public ShellSettings Shell { get; init; } = new();
+
     internal static AppSettings Normalize(AppSettings? settings)
     {
         var font = settings?.Font ?? new FontSettings();
@@ -36,7 +38,8 @@ internal sealed record AppSettings
             Theme = new ThemeSettings
             {
                 Name = theme.Name
-            }
+            },
+            Shell = ShellSettings.Normalize(settings?.Shell)
         };
     }
 }
@@ -53,4 +56,42 @@ internal sealed record FontSettings
 internal sealed record ThemeSettings
 {
     public string Name { get; init; } = TerminalThemeCatalog.DefaultName;
+}
+
+internal sealed record ShellSettings
+{
+    public string Profile { get; init; } = ShellProfileCatalog.AutoId;
+
+    public string? Executable { get; init; }
+
+    public string? Arguments { get; init; }
+
+    internal static ShellSettings Normalize(ShellSettings? settings)
+    {
+        var profile = ShellProfileCatalog.Find(settings?.Profile);
+        var executable = NormalizeText(settings?.Executable, 1_024);
+        var arguments = NormalizeText(settings?.Arguments, 4_096, preserveEmpty: true);
+        return new ShellSettings
+        {
+            Profile = profile.Id,
+            Executable = executable,
+            Arguments = arguments
+        };
+    }
+
+    private static string? NormalizeText(string? value, int maximumLength, bool preserveEmpty = false)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        value = value.Trim();
+        if (value.Length > maximumLength)
+        {
+            return null;
+        }
+
+        return value.Length == 0 && !preserveEmpty ? null : value;
+    }
 }
