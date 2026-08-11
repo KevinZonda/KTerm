@@ -350,6 +350,12 @@ internal sealed class MainForm : Form
         await Task.Delay(250);
         await DispatchDebugShortcut("Minus", "-", 0xBD);
         await Task.Delay(750);
+        await DispatchDebugClick(80, 18, "middle");
+        await Task.Delay(500);
+        await DispatchDebugShortcut("KeyT", "t", 0x54);
+        await Task.Delay(500);
+        await DispatchDebugClick(80, 18);
+        await Task.Delay(250);
         await _webView.CoreWebView2.CallDevToolsProtocolMethodAsync(
             "Input.insertText",
             JsonSerializer.Serialize(new { text = "echo KTERM_SMOKE" }));
@@ -381,14 +387,14 @@ internal sealed class MainForm : Form
         await _webView.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", arguments);
     }
 
-    private async Task DispatchDebugClick(int x, int y)
+    private async Task DispatchDebugClick(int x, int y, string button = "left")
     {
         var arguments = JsonSerializer.Serialize(new
         {
             type = "mousePressed",
             x,
             y,
-            button = "left",
+            button,
             clickCount = 1
         });
         await _webView.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", arguments);
@@ -398,7 +404,7 @@ internal sealed class MainForm : Form
             type = "mouseReleased",
             x,
             y,
-            button = "left",
+            button,
             clickCount = 1
         });
         await _webView.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", arguments);

@@ -235,6 +235,20 @@ export class Workspace implements TerminalCallbacks {
       const tabElement = document.createElement('div');
       tabElement.className = 'tab';
       tabElement.classList.toggle('active', tab.id === this.activeTabId);
+      tabElement.addEventListener('pointerdown', event => {
+        if (event.button === 1) {
+          event.preventDefault();
+        }
+      });
+      tabElement.addEventListener('auxclick', event => {
+        if (event.button !== 1) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        void this.closeTab(tab.id);
+      });
 
       const activate = document.createElement('button');
       activate.type = 'button';
