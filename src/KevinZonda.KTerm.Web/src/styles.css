@@ -26,11 +26,12 @@ button {
 
 #app {
   display: grid;
-  grid-template-rows: 36px minmax(0, 1fr);
-  background: #0c0f14;
+  grid-template-rows: env(titlebar-area-height, 36px) 1px minmax(0, 1fr);
+  background: #272d37;
 }
 
 #tab-strip {
+  grid-row: 1;
   display: flex;
   align-items: stretch;
   min-width: 0;
@@ -40,7 +41,6 @@ button {
   overflow-x: auto;
   overflow-y: hidden;
   background: #171b22;
-  border-bottom: 1px solid #272d37;
   scrollbar-width: thin;
   -webkit-app-region: drag;
   app-region: drag;
@@ -110,10 +110,12 @@ button {
 }
 
 #workspace {
+  grid-row: 3;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   position: relative;
+  background: #0c0f14;
 }
 
 .split {
