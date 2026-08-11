@@ -391,7 +391,7 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private focusSession(sessionId: string): void {
-    requestAnimationFrame(() => this.terminals.get(sessionId)?.focus());
+    this.terminals.get(sessionId)?.focus();
   }
 
   private fitActiveTerminals(): void {

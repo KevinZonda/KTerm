@@ -106,7 +106,11 @@ export class TerminalController {
     if (!this.opened) {
       this.terminal.open(this.host);
       this.opened = true;
+      if (!this.fitNow()) {
+        this.scheduleFit();
+      }
       this.enableWebgl();
+      return;
     }
 
     this.scheduleFit();
@@ -141,17 +145,7 @@ export class TerminalController {
     }
 
     this.fitTimer = window.setTimeout(() => {
-      this.fitTimer = undefined;
-      if (!this.opened || !this.element.isConnected ||
-          this.element.clientWidth < 20 || this.element.clientHeight < 20) {
-        return;
-      }
-
-      try {
-        this.fitAddon.fit();
-      } catch {
-        // A detached/transitioning pane will be fitted on its next ResizeObserver event.
-      }
+      this.fitNow();
     }, 40);
   }
 
@@ -196,6 +190,25 @@ export class TerminalController {
       this.element.classList.add('renderer-webgl');
     } catch {
       this.element.classList.add('renderer-fallback');
+    }
+  }
+
+  private fitNow(): boolean {
+    if (this.fitTimer !== undefined) {
+      window.clearTimeout(this.fitTimer);
+      this.fitTimer = undefined;
+    }
+    if (!this.opened || !this.element.isConnected ||
+        this.element.clientWidth < 20 || this.element.clientHeight < 20) {
+      return false;
+    }
+
+    try {
+      this.fitAddon.fit();
+      return true;
+    } catch {
+      // A detached/transitioning pane will be fitted on its next ResizeObserver event.
+      return false;
     }
   }
 
