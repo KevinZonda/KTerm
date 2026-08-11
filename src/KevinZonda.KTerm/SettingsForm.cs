@@ -79,24 +79,50 @@ internal sealed class SettingsForm : Form
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(22, 18, 22, 18),
+            Padding = new Padding(16),
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 2,
             BackColor = SurfaceColor
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var heading = new Label
+        var tabs = new TabControl
         {
-            AutoSize = true,
-            Text = "Terminal font",
-            Font = new Font(Font.FontFamily, 15, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 16)
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 0, 14)
         };
-        root.Controls.Add(heading, 0, 0);
+        tabs.TabPages.Add(CreateFontPage());
+        tabs.TabPages.Add(CreateThemePage());
+        root.Controls.Add(tabs, 0, 0);
+        root.Controls.Add(CreateActions(), 0, 1);
+
+        _fontFamily.TextChanged += (_, _) => UpdatePreview();
+        _fontSize.ValueChanged += (_, _) => UpdatePreview();
+        _lineHeight.ValueChanged += (_, _) => UpdatePreview();
+        return root;
+    }
+
+    private TabPage CreateFontPage()
+    {
+        var page = new TabPage("Font")
+        {
+            BackColor = SurfaceColor,
+            ForeColor = ForeColor,
+            Padding = new Padding(16),
+            UseVisualStyleBackColor = false
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = SurfaceColor,
+            Margin = new Padding(0)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var fields = new TableLayoutPanel
         {
@@ -130,14 +156,14 @@ internal sealed class SettingsForm : Form
         ConfigureNumber(_lineHeight, 0.8m, 2, 0.01m, 2);
         _lineHeight.Margin = new Padding(10, 5, 0, 16);
         fields.Controls.Add(_lineHeight, 1, 3);
-        root.Controls.Add(fields, 0, 1);
+        layout.Controls.Add(fields, 0, 0);
 
         var previewPanel = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = FieldColor,
             Padding = new Padding(14),
-            Margin = new Padding(0, 0, 0, 18)
+            Margin = new Padding(0)
         };
         previewPanel.Paint += (_, eventArgs) =>
             ControlPaint.DrawBorder(eventArgs.Graphics, previewPanel.ClientRectangle, BorderColor, ButtonBorderStyle.Solid);
@@ -146,8 +172,32 @@ internal sealed class SettingsForm : Form
         _preview.TextAlign = ContentAlignment.MiddleLeft;
         _preview.AutoEllipsis = true;
         previewPanel.Controls.Add(_preview);
-        root.Controls.Add(previewPanel, 0, 2);
+        layout.Controls.Add(previewPanel, 0, 1);
+        page.Controls.Add(layout);
+        return page;
+    }
 
+    private TabPage CreateThemePage()
+    {
+        var page = new TabPage("Theme")
+        {
+            BackColor = SurfaceColor,
+            ForeColor = ForeColor,
+            Padding = new Padding(16),
+            UseVisualStyleBackColor = false
+        };
+        page.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Theme settings will be added next.",
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(174, 183, 197)
+        });
+        return page;
+    }
+
+    private Control CreateActions()
+    {
         var actions = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -183,14 +233,10 @@ internal sealed class SettingsForm : Form
         commitButtons.Controls.Add(cancel);
         commitButtons.Controls.Add(save);
         actions.Controls.Add(commitButtons, 2, 0);
-        root.Controls.Add(actions, 0, 3);
 
         AcceptButton = save;
         CancelButton = cancel;
-        _fontFamily.TextChanged += (_, _) => UpdatePreview();
-        _fontSize.ValueChanged += (_, _) => UpdatePreview();
-        _lineHeight.ValueChanged += (_, _) => UpdatePreview();
-        return root;
+        return actions;
     }
 
     private void PopulateFonts()

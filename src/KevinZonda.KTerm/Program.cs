@@ -6,7 +6,7 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+        Application.SetColorMode(SystemColorMode.Dark);
         Application.Run(new MainForm());
     }
 }
-
