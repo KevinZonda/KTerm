@@ -1,0 +1,55 @@
+# KevinZonda.KTerm
+
+KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。原生宿主使用 .NET 10 WinForms 和 WebView2；终端前端使用 xterm.js/WebGL；每个 Pane 都连接独立的 Windows ConPTY 和 Shell 进程。
+
+## 当前功能
+
+- 多 Tab，每个 Tab 保存独立的递归分屏布局。
+- 同一窗口支持左右、上下拆分以及 2×2 多终端。
+- 每个 Pane 独立运行 PowerShell、PowerShell 7 或 CMD。
+- WebGL 渲染失败时自动回退。
+- 拖动分隔线和窗口 resize 会同步更新 ConPTY 行列数。
+- 支持终端选择、`Ctrl+Shift+C` 复制与 `Ctrl+Shift+V` 粘贴。
+- 关闭 Pane、Tab 或应用时回收相应 Shell、ConPTY 和 Win32 handle。
+
+## 快捷键
+
+| 快捷键 | 操作 |
+| --- | --- |
+| `Alt+T` | 新建 Tab |
+| `Alt+\` | 将聚焦 Pane 拆成左右两列 |
+| `Alt+-` | 将聚焦 Pane 拆成上下两行 |
+| `Ctrl+Shift+C` | 复制终端选择 |
+| `Ctrl+Shift+V` | 粘贴到聚焦终端 |
+
+快捷键只在 KTerm 位于前台时生效。
+
+## 构建和运行
+
+源代码构建需要：
+
+- Windows 10 1903 或更高版本
+- .NET 10 SDK
+- Node.js 与 npm
+- Microsoft Edge WebView2 Evergreen Runtime
+
+```powershell
+dotnet build KevinZonda.KTerm.slnx
+dotnet run --project src\KevinZonda.KTerm\KevinZonda.KTerm.csproj
+```
+
+`.csproj` 会执行前端的 `npm ci`（首次）和 `npm run build`，随后把 Vite 产物复制到应用输出目录的 `wwwroot`。
+
+运行 Debug 端到端 smoke test（自动创建两个 Tab，并在活动 Tab 构造 2×2）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\smoke.ps1
+```
+
+发布 framework-dependent win-x64 版本：
+
+```powershell
+dotnet publish src\KevinZonda.KTerm\KevinZonda.KTerm.csproj -c Release -r win-x64 --self-contained false
+```
+
+详细架构、消息协议与验收标准参见 [docs/plan.md](docs/plan.md)。

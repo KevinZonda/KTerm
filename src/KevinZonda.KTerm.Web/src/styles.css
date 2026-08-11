@@ -1,0 +1,248 @@
+:root {
+  color: #d8dee9;
+  background: #0c0f14;
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button {
+  color: inherit;
+  font: inherit;
+}
+
+#app {
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  background: #0c0f14;
+}
+
+#tab-strip {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  padding: 4px 5px 0;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #171b22;
+  border-bottom: 1px solid #272d37;
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: grid;
+  grid-template-columns: minmax(60px, 180px) 26px;
+  min-width: 105px;
+  max-width: 220px;
+  height: 31px;
+  background: #202630;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+}
+
+.tab.active {
+  background: #0c0f14;
+  border-color: #323a47;
+  border-bottom-color: #0c0f14;
+}
+
+.tab-activate,
+.tab-close,
+#new-tab,
+.pane-close {
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.tab-activate {
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-size: 12px;
+}
+
+.tab-close {
+  opacity: 0.6;
+  font-size: 16px;
+}
+
+.tab-close:hover,
+#new-tab:hover,
+.pane-close:hover {
+  opacity: 1;
+  background: #343c49;
+}
+
+#new-tab {
+  flex: 0 0 31px;
+  height: 31px;
+  border-radius: 5px;
+  font-size: 19px;
+  opacity: 0.8;
+}
+
+#workspace {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.split {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.split-columns {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.split-rows {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.split > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+.split-columns > .split-divider {
+  cursor: col-resize;
+  border-left: 1px solid #242b35;
+  border-right: 1px solid #242b35;
+}
+
+.split-rows > .split-divider {
+  cursor: row-resize;
+  border-top: 1px solid #242b35;
+  border-bottom: 1px solid #242b35;
+}
+
+.split-divider {
+  position: relative;
+  z-index: 4;
+  background: #151a21;
+  touch-action: none;
+}
+
+.split-divider:hover,
+.split-divider.dragging {
+  background: #5e81ac;
+}
+
+.terminal-pane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 5px 4px 3px 7px;
+  overflow: hidden;
+  background: #0c0f14;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.terminal-pane.focused {
+  box-shadow: inset 0 0 0 1px #5e81ac;
+}
+
+.terminal-pane.exited {
+  background: #101318;
+}
+
+.terminal-host,
+.terminal-host .xterm {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-host .xterm-viewport {
+  scrollbar-color: #3b4655 transparent;
+  scrollbar-width: thin;
+}
+
+.pane-close {
+  position: absolute;
+  z-index: 5;
+  top: 5px;
+  right: 8px;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border-radius: 4px;
+  color: #d8dee9;
+  background: #1d232d;
+  opacity: 0;
+  line-height: 20px;
+  font-size: 17px;
+}
+
+.terminal-pane:hover > .pane-close,
+.terminal-pane.exited > .pane-close {
+  opacity: 0.8;
+}
+
+#status {
+  display: none;
+  position: fixed;
+  z-index: 20;
+  right: 12px;
+  bottom: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 8px 11px;
+  border: 1px solid #3b4655;
+  border-radius: 6px;
+  color: #d8dee9;
+  background: #202630;
+  box-shadow: 0 8px 28px #0008;
+  font-size: 12px;
+}
+
+#status.visible {
+  display: block;
+}
+
+#status.error {
+  border-color: #bf616a;
+  color: #ffccd0;
+}
+
+.empty-state,
+.terminal-missing {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #7d8796;
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tab,
+  .pane-close,
+  .split-divider {
+    transition: background-color 100ms ease, opacity 100ms ease;
+  }
+}
