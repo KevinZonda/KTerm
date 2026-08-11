@@ -362,11 +362,11 @@ internal sealed class MainForm : Form
         await Task.Delay(250);
         await DispatchDebugShortcut("Minus", "-", 0xBD);
         await Task.Delay(750);
-        await DispatchDebugClick(80, 18, "middle");
+        await DispatchDebugClick(80, 52, "middle");
         await Task.Delay(500);
         await DispatchDebugShortcut("KeyT", "t", 0x54);
         await Task.Delay(500);
-        await DispatchDebugClick(80, 18);
+        await DispatchDebugClick(80, 52);
         await Task.Delay(250);
         await _webView.CoreWebView2.CallDevToolsProtocolMethodAsync(
             "Input.insertText",

@@ -117,18 +117,18 @@ kterm/
 
 前端和宿主分开开发，但发布时前端只是 KTerm.App 的静态资源，不会附带 Node.js runtime。
 
-## 5. Tab 与 Split 数据模型
+## 5. Pane Tab 与 Split 数据模型
 
-工作区状态由 TypeScript 管理。每个 Tab 保存一棵递归分割树：
+工作区状态由 TypeScript 管理。递归分割树的叶节点是 Pane，每个 Pane 独立保存自己的 Terminal Tab：
 
 ```typescript
 type SessionId = string;
-type TabId = string;
+type PaneId = string;
 
 type LayoutNode =
   | {
-      type: 'terminal';
-      sessionId: SessionId;
+      type: 'pane';
+      paneId: PaneId;
     }
   | {
       type: 'split';
@@ -138,11 +138,10 @@ type LayoutNode =
       second: LayoutNode;
     };
 
-interface TabState {
-  id: TabId;
-  title: string;
-  root: LayoutNode;
-  focusedSessionId: SessionId;
+interface PaneState {
+  id: PaneId;
+  tabs: Array<{ sessionId: SessionId; title: string }>;
+  activeSessionId: SessionId;
 }
 ```
 
@@ -151,18 +150,18 @@ interface TabState {
 - `columns`：左右排列，分隔线为竖线，对应 `Alt+\`。
 - `rows`：上下排列，分隔线为横线，对应 `Alt+-`。
 
-拆分操作只替换当前叶节点。例如对 session A 执行左右拆分：
+拆分操作只替换当前 Pane 叶节点。例如对 pane A 执行左右拆分：
 
 ```text
-terminal(A)
+pane(A) [tab A1, tab A2]
 ```
 
 变为：
 
 ```text
 split(columns, 0.5)
-├─ terminal(A)
-└─ terminal(B)  # 新建 ConPTY，完成后获得 session B
+├─ pane(A) [tab A1, tab A2]
+└─ pane(B) [tab B1]  # 新建 ConPTY，完成后获得 session B1
 ```
 
 2×2 布局由嵌套分割自然表达：
@@ -170,14 +169,14 @@ split(columns, 0.5)
 ```text
 split(columns)
 ├─ split(rows)
-│  ├─ terminal(A)
-│  └─ terminal(B)
+│  ├─ pane(A)
+│  └─ pane(B)
 └─ split(rows)
-   ├─ terminal(C)
-   └─ terminal(D)
+   ├─ pane(C)
+   └─ pane(D)
 ```
 
-MVP 中每次新建 Tab 或拆分都启动一个新的默认 Shell，新 Pane 创建成功后立即获得焦点。分隔比例初始为 `0.5`，拖动后限制在合理范围，例如 `0.1–0.9`。
+MVP 中，新建 Tab 会在当前聚焦 Pane 内启动新的默认 Shell；拆分会创建包含一个 Terminal Tab 的新 Pane。新 Pane 创建成功后立即获得焦点。分隔比例初始为 `0.5`，拖动后限制在合理范围，例如 `0.1–0.9`。
 
 ## 6. 快捷键与焦点
 
@@ -214,10 +213,10 @@ window.addEventListener('keydown', event => {
 
 焦点规则：
 
-- 鼠标点击 Pane 时更新当前 Tab 的 `focusedSessionId`。
-- 新建 Tab 后聚焦其第一个 terminal。
+- 鼠标点击 Pane 时更新 `focusedPaneId`。
+- 新建 Tab 后将它设为当前 Pane 的 `activeSessionId` 并聚焦对应 terminal。
 - 拆分后聚焦新 terminal。
-- 切换 Tab 后恢复该 Tab 上次聚焦的 terminal。
+- 切换 Pane Tab 后恢复对应 terminal 的焦点和尺寸。
 - 关闭 Pane 后优先聚焦其相邻兄弟节点。
 - 聚焦视觉效果由 Pane 外框表示，不依赖浏览器默认 outline。
 
@@ -298,7 +297,7 @@ ConPTY 输出是 UTF-8。读取端使用跨 chunk 保持状态的 UTF-8 `Decoder
 - 与上次行列数相同则不发送。
 - 宿主再次去重后调用 `ResizePseudoConsole`。
 - 隐藏 Tab 不发送 `0×0` 或无意义 resize。
-- Tab 重新显示后等待一帧，再 fit 并发送真实尺寸。
+- Pane Tab 重新显示后等待一帧，再 fit 并发送真实尺寸。
 
 分隔线使用 Pointer Events，并在拖动期间只更新对应 split node 的 `ratio`。布局由 CSS Grid 或绝对布局计算，MVP 优先 CSS Grid。
 
@@ -358,7 +357,7 @@ interface BridgeMessage<T> {
 4. 配置本地虚拟主机到前端构建目录的映射。
 5. 注册 WebMessage、ProcessFailed、NewWindowRequested 和 NavigationStarting。
 6. 导航到本地应用页面。
-7. 等待 `app.ready` 后再创建首个 Tab/session。
+7. 等待 `app.ready` 后再创建首个 Pane/Tab/session。
 
 MVP 安全约束：
 
@@ -375,13 +374,15 @@ WebView2 进程模型包括 browser、renderer 和 GPU 等进程。单个页面�
 
 ## 12. MVP 周边设施
 
-### 12.1 Tab Strip
+### 12.1 Native Bar 与 Pane Tab Strip
 
-- 位于 Web UI 顶部。
-- 显示 Tab 标题、激活状态和关闭按钮。
-- 标题初始为 Shell 名称；当前聚焦 session 报告 title 时更新 Tab 标题。
-- `Alt+T` 从任意 Pane 创建并切换到新 Tab。
-- Tab 关闭时先关闭其全部 session，再从状态树移除。
+- Web UI 顶部保留独立的 Native Bar，只承载窗口拖动区域和系统窗口按钮。
+- Split Tree 的叶节点是 Pane；每个 Pane 拥有自己的 Tab Strip 和一组 Terminal session。
+- Tab 标题初始为 Shell 名称，并随对应 session 报告的 title 更新。
+- `Alt+T` 在当前聚焦 Pane 内创建并切换到新 Tab。
+- `Alt+\` 和 `Alt+-` 拆分当前 Pane，新 Pane 默认包含一个新 Terminal Tab。
+- Tab 关闭时只关闭对应 session；关闭 Pane 的最后一个 Tab 时折叠 Split Tree。
+- 关闭最后一个 Pane 的最后一个 Tab 后自动创建新的默认 Pane，保持窗口可用。
 
 ### 12.2 Pane Chrome
 
@@ -424,14 +425,14 @@ WebView2 进程模型包括 browser、renderer 和 GPU 等进程。单个页面�
 
 完成标准：两个不可见/可见 xterm 实例分别连接独立 Shell，输入输出严格隔离。
 
-### 阶段 3：Tab、Split Tree 与快捷键
+### 阶段 3：Pane Tab、Split Tree 与快捷键
 
-- 实现 Tab store 和递归 layout tree。
+- 实现 Pane-local Tab store 和递归 layout tree。
 - 实现 `Alt+T`、`Alt+\`、`Alt+-`。
 - 实现左右/上下 split、聚焦和拆分后的新 session 创建。
 - 实现 2×2 布局和分隔线拖动。
 
-完成标准：仅用上述三个快捷键即可创建多个 Tab 和 2×2 四终端布局，每个 Pane 均可独立交互。
+完成标准：仅用上述三个快捷键即可在 Pane 内创建多个 Tab，并创建 2×2 四 Pane 布局；每个 Pane 均可独立切换和交互。
 
 ### 阶段 4：生命周期和稳定性
 

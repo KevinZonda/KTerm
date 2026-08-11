@@ -7,7 +7,6 @@ import { resolveTerminalTheme } from './themes';
 
 export interface TerminalCallbacks {
   onFocus(sessionId: string): void;
-  onClose(sessionId: string): void;
   onTitle(sessionId: string, title: string): void;
 }
 
@@ -45,7 +44,7 @@ export class TerminalController {
     this.element.title = `${session.shellName} · PID ${session.processId}`;
 
     this.host.className = 'terminal-host';
-    this.element.append(this.host, this.createCloseButton());
+    this.element.append(this.host);
 
     this.terminal = new Terminal({
       allowProposedApi: false,
@@ -228,18 +227,4 @@ export class TerminalController {
       .catch(error => console.error('Unable to paste clipboard text.', error));
   };
 
-  private createCloseButton(): HTMLButtonElement {
-    const close = document.createElement('button');
-    close.className = 'pane-close';
-    close.type = 'button';
-    close.title = 'Close pane';
-    close.setAttribute('aria-label', 'Close terminal pane');
-    close.textContent = '×';
-    close.addEventListener('pointerdown', event => event.stopPropagation());
-    close.addEventListener('click', event => {
-      event.stopPropagation();
-      this.callbacks.onClose(this.sessionId);
-    });
-    return close;
-  }
 }
