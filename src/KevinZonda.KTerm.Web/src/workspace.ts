@@ -89,7 +89,7 @@ export class Workspace implements TerminalCallbacks {
       this.setStatus('Starting split shell…');
       const current = this.terminals.get(tab.focusedSessionId);
       const session = await this.bridge.createSession(
-        Math.max(current?.element.clientWidth ? 40 : 80, 40),
+        current?.element.clientWidth ? 40 : 80,
         24
       );
       this.addTerminal(session);

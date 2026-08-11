@@ -12,10 +12,7 @@ internal sealed class WebViewBridge : IDisposable
 {
     private const int MaxOutputBatchChars = 64 * 1024;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;

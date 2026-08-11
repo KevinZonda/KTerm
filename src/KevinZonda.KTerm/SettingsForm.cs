@@ -27,6 +27,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _inheritWindowsPath = new();
     private readonly List<Font> _previewFonts = [];
     private TabPage? _shellPage;
+    private bool _applyingValues;
     private bool _applyingShellValues;
 
     internal SettingsForm(AppSettings settings)
@@ -49,7 +50,6 @@ internal sealed class SettingsForm : Form
         PopulateShellProfiles();
         PopulateMsys2Environments();
         ApplyValues(settings);
-        UpdatePreview();
     }
 
     internal AppSettings Settings => AppSettings.Normalize(new AppSettings
@@ -142,9 +142,9 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(_tabs, 0, 0);
         root.Controls.Add(CreateActions(), 0, 1);
 
-        _fontFamily.TextChanged += (_, _) => UpdatePreview();
-        _fontSize.ValueChanged += (_, _) => UpdatePreview();
-        _lineHeight.ValueChanged += (_, _) => UpdatePreview();
+        _fontFamily.TextChanged += (_, _) => HandlePreviewChanged();
+        _fontSize.ValueChanged += (_, _) => HandlePreviewChanged();
+        _lineHeight.ValueChanged += (_, _) => HandlePreviewChanged();
         return root;
     }
 
@@ -363,11 +363,7 @@ internal sealed class SettingsForm : Form
 
         var defaults = CreateButton("Restore defaults");
         defaults.AutoSize = true;
-        defaults.Click += (_, _) =>
-        {
-            ApplyValues(AppSettings.Normalize(null));
-            UpdatePreview();
-        };
+        defaults.Click += (_, _) => ApplyValues(new AppSettings());
         actions.Controls.Add(defaults, 0, 0);
 
         var commitButtons = new FlowLayoutPanel
@@ -424,22 +420,31 @@ internal sealed class SettingsForm : Form
     private void ApplyValues(AppSettings settings)
     {
         var normalized = AppSettings.Normalize(settings);
-        _fontFamily.Text = normalized.Font.Family;
-        _fontSize.Value = (decimal)normalized.Font.Size;
-        _lineHeight.Value = (decimal)normalized.Font.LineHeight;
-        _themeName.SelectedItem = normalized.Theme.Name;
-        if (_themeName.SelectedIndex < 0)
+        _applyingValues = true;
+        try
         {
-            _themeName.SelectedIndex = 0;
+            _fontFamily.Text = normalized.Font.Family;
+            _fontSize.Value = (decimal)normalized.Font.Size;
+            _lineHeight.Value = (decimal)normalized.Font.LineHeight;
+            _themeName.SelectedItem = normalized.Theme.Name;
+            if (_themeName.SelectedIndex < 0)
+            {
+                _themeName.SelectedIndex = 0;
+            }
+
+            ApplyShellValues(normalized.Shell);
+        }
+        finally
+        {
+            _applyingValues = false;
         }
 
-        ApplyShellValues(normalized.Shell);
+        UpdatePreview();
     }
 
     private void ApplyShellValues(ShellSettings settings)
     {
-        var normalized = ShellSettings.Normalize(settings);
-        var profile = ShellProfileCatalog.Find(normalized.Profile);
+        var profile = ShellProfileCatalog.Find(settings.Profile);
         _applyingShellValues = true;
         try
         {
@@ -448,10 +453,10 @@ internal sealed class SettingsForm : Form
                 .First(candidate => candidate.Id == profile.Id);
             _shellExecutable.Text = profile.Id == ShellProfileCatalog.AutoId
                 ? string.Empty
-                : normalized.Executable ?? string.Empty;
-            _shellArguments.Text = normalized.Arguments ?? profile.DefaultArguments;
-            _msys2Environment.SelectedItem = normalized.Msys2Environment;
-            _inheritWindowsPath.Checked = normalized.InheritWindowsPath;
+                : settings.Executable ?? string.Empty;
+            _shellArguments.Text = settings.Arguments ?? profile.DefaultArguments;
+            _msys2Environment.SelectedItem = settings.Msys2Environment;
+            _inheritWindowsPath.Checked = settings.InheritWindowsPath;
             _shellExecutable.ReadOnly = profile.Id == ShellProfileCatalog.AutoId;
             _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
             UpdateMsys2Controls(profile);
@@ -527,6 +532,14 @@ internal sealed class SettingsForm : Form
         var previewFont = CreatePreviewFont();
         _previewFonts.Add(previewFont);
         _preview.Font = previewFont;
+    }
+
+    private void HandlePreviewChanged()
+    {
+        if (!_applyingValues)
+        {
+            UpdatePreview();
+        }
     }
 
     private Font CreatePreviewFont()

@@ -30,7 +30,6 @@ internal static class NativeMethods
     internal const uint CreateUnicodeEnvironment = 0x0000_0400;
     internal const uint WaitObject0 = 0x0000_0000;
     internal const uint WaitTimeout = 0x0000_0102;
-    internal const uint StillActive = 259;
     internal const nuint ProcThreadAttributePseudoConsole = 0x0002_0016;
 
     [StructLayout(LayoutKind.Sequential)]

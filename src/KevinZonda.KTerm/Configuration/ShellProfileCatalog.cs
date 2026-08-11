@@ -59,13 +59,8 @@ internal static class ShellProfileCatalog
         return profile.Id switch
         {
             AutoId => ResolveAuto(),
-            PowerShell7Id => Create(profile, normalized),
-            WindowsPowerShellId => Create(profile, normalized),
-            CommandPromptId => Create(profile, normalized),
             Msys2ZshId => CreateMsys2Zsh(profile, normalized),
-            GitBashId => Create(profile, normalized),
-            CustomId => Create(profile, normalized),
-            _ => ResolveAuto()
+            _ => Create(profile, normalized)
         };
     }
 

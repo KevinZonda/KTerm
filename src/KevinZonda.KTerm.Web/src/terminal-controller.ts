@@ -13,7 +13,6 @@ export interface TerminalCallbacks {
 
 export class TerminalController {
   public readonly sessionId: string;
-  public readonly shellName: string;
   public readonly element: HTMLDivElement;
 
   private readonly bridge: NativeBridge;
@@ -38,7 +37,6 @@ export class TerminalController {
     theme: ThemeSettings
   ) {
     this.sessionId = session.sessionId;
-    this.shellName = session.shellName;
     this.bridge = bridge;
     this.callbacks = callbacks;
     this.element = document.createElement('div');
