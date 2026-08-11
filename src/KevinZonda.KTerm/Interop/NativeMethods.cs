@@ -12,6 +12,12 @@ internal static class NativeMethods
     internal const int DwmBorderColor = 34;
     internal const int DwmCaptionColor = 35;
     internal const int DwmTextColor = 36;
+    internal const int WmSysCommand = 0x0112;
+    internal const uint MenuFlagByCommand = 0x0000;
+    internal const uint MenuFlagString = 0x0000;
+    internal const uint MenuFlagGrayed = 0x0001;
+    internal const uint MenuFlagEnabled = 0x0000;
+    internal const uint MenuFlagSeparator = 0x0800;
     internal const uint ExtendedStartupInfoPresent = 0x0008_0000;
     internal const uint CreateUnicodeEnvironment = 0x0000_0400;
     internal const uint WaitObject0 = 0x0000_0000;
@@ -149,6 +155,29 @@ internal static class NativeMethods
         int attribute,
         ref int value,
         int valueSize);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetSystemMenu(
+        IntPtr hWnd,
+        [MarshalAs(UnmanagedType.Bool)] bool bRevert);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AppendMenuW(
+        IntPtr hMenu,
+        uint uFlags,
+        nuint uIDNewItem,
+        string? lpNewItem);
+
+    [DllImport("user32.dll")]
+    internal static extern uint EnableMenuItem(
+        IntPtr hMenu,
+        uint uIDEnableItem,
+        uint uEnable);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DrawMenuBar(IntPtr hWnd);
 
     internal static Win32Exception LastError(string operation) =>
         new(Marshal.GetLastWin32Error(), operation);

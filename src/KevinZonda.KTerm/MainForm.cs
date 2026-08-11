@@ -13,6 +13,7 @@ namespace KevinZonda.KTerm;
 internal sealed class MainForm : Form
 {
     private const string AppHostName = "app.kterm";
+    private const int SystemCommandSettings = 0x1000;
     private static readonly Color FrameColor = Color.FromArgb(23, 27, 34);
     private static readonly Color FrameBorderColor = Color.FromArgb(48, 56, 69);
     private static readonly Color FrameTextColor = Color.FromArgb(216, 222, 233);
@@ -53,6 +54,20 @@ internal sealed class MainForm : Form
     {
         base.OnHandleCreated(eventArgs);
         ApplyDwmFrameColors();
+        AddSettingsToSystemMenu();
+    }
+
+    protected override void WndProc(ref Message message)
+    {
+        if (message.Msg == NativeMethods.WmSysCommand &&
+            message.WParam.ToInt64() == SystemCommandSettings)
+        {
+            BeginInvoke((Action)ShowSettings);
+            message.Result = IntPtr.Zero;
+            return;
+        }
+
+        base.WndProc(ref message);
     }
 
     private async void HandleShown(object? sender, EventArgs eventArgs)
@@ -317,6 +332,39 @@ internal sealed class MainForm : Form
         NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmTextColor, ref textColor, valueSize);
     }
 
+    private void AddSettingsToSystemMenu()
+    {
+        var systemMenu = NativeMethods.GetSystemMenu(Handle, false);
+        if (systemMenu == IntPtr.Zero)
+        {
+            return;
+        }
+
+        NativeMethods.AppendMenuW(
+            systemMenu,
+            NativeMethods.MenuFlagSeparator,
+            0,
+            null);
+        NativeMethods.AppendMenuW(
+            systemMenu,
+            NativeMethods.MenuFlagString,
+            SystemCommandSettings,
+            "Settings...\tAlt+S");
+    }
+
+    private void SetSettingsSystemMenuEnabled(bool enabled)
+    {
+        if (!IsHandleCreated) return;
+
+        var systemMenu = NativeMethods.GetSystemMenu(Handle, false);
+        if (systemMenu == IntPtr.Zero)  return;
+
+        var state = NativeMethods.MenuFlagByCommand |
+            (enabled ? NativeMethods.MenuFlagEnabled : NativeMethods.MenuFlagGrayed);
+        NativeMethods.EnableMenuItem(systemMenu, SystemCommandSettings, state);
+        NativeMethods.DrawMenuBar(Handle);
+    }
+
     private static void OpenExternal(string uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) ||
@@ -367,6 +415,7 @@ internal sealed class MainForm : Form
         }
 
         _settingsOpen = true;
+        SetSettingsSystemMenuEnabled(false);
         try
         {
             using var settingsForm = new SettingsForm(_settings);
@@ -395,6 +444,7 @@ internal sealed class MainForm : Form
         finally
         {
             _settingsOpen = false;
+            SetSettingsSystemMenuEnabled(true);
         }
     }
 
