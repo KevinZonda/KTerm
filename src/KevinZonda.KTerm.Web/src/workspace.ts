@@ -335,6 +335,7 @@ export class Workspace implements TerminalCallbacks {
   private renderPane(pane: PaneState): HTMLElement {
     const element = document.createElement('section');
     element.className = 'pane';
+    element.classList.toggle('compact', this.panes.size === 1 && pane.tabs.length === 1);
     element.dataset.paneId = pane.id;
     element.addEventListener('pointerdown', () => {
       this.focusedPaneId = pane.id;

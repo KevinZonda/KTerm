@@ -381,6 +381,7 @@ WebView2 进程模型包括 browser、renderer 和 GPU 等进程。单个页面�
 - Tab 标题初始为 Shell 名称，并随对应 session 报告的 title 更新。
 - `Alt+T` 在当前聚焦 Pane 内创建并切换到新 Tab。
 - `Alt+\` 和 `Alt+-` 拆分当前 Pane，新 Pane 默认包含一个新 Terminal Tab。
+- 工作区只有一个 Pane 且该 Pane 只有一个 Tab 时隐藏 Pane Tab Strip；出现多 Tab 或多 Pane 后自动显示。
 - Tab 关闭时只关闭对应 session；关闭 Pane 的最后一个 Tab 时折叠 Split Tree。
 - 关闭最后一个 Pane 的最后一个 Tab 后自动创建新的默认 Pane，保持窗口可用。
 
