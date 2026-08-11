@@ -77,6 +77,7 @@ internal sealed class MainForm : Form
 
         try
         {
+            _sessions.Prewarm(80, 24);
             await InitializeWebView();
         }
         catch (Exception exception)
