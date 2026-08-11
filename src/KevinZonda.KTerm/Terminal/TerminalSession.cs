@@ -74,7 +74,8 @@ internal sealed class TerminalSession : IAsyncDisposable
         int columns,
         int rows,
         ShellLaunchSpec shell,
-        TerminalThemePreset theme)
+        TerminalThemePreset theme,
+        string startingDirectory)
     {
         columns = Math.Clamp(columns, 2, short.MaxValue);
         rows = Math.Clamp(rows, 1, short.MaxValue);
@@ -161,7 +162,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                 false,
                 NativeMethods.ExtendedStartupInfoPresent | NativeMethods.CreateUnicodeEnvironment,
                 environmentBlock,
-                Environment.CurrentDirectory,
+                startingDirectory,
                 ref startupInfo,
                 out var processInformation);
 

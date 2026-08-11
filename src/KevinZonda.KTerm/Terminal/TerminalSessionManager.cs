@@ -7,6 +7,7 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, TerminalSession> _sessions = new();
     private readonly object _prewarmLock = new();
+    private readonly string _startingDirectory;
     private AppSettings _settings;
     private Task<TerminalSession>? _prewarmedSession;
     private int _disposed;
@@ -15,9 +16,10 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 
     internal event Action<string, uint>? SessionExited;
 
-    internal TerminalSessionManager(AppSettings settings)
+    internal TerminalSessionManager(AppSettings settings, string startingDirectory)
     {
         _settings = settings;
+        _startingDirectory = startingDirectory;
     }
 
     internal void Prewarm(int columns, int rows)
@@ -41,7 +43,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
                 columns,
                 rows,
                 ShellProfileCatalog.Resolve(settings.Shell),
-                TerminalThemeCatalog.Find(settings.Theme.Name)));
+                TerminalThemeCatalog.Find(settings.Theme.Name),
+                _startingDirectory));
         }
     }
 
@@ -58,7 +61,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
                 columns,
                 rows,
                 ShellProfileCatalog.Resolve(settings.Shell),
-                TerminalThemeCatalog.Find(settings.Theme.Name))).ConfigureAwait(false);
+                TerminalThemeCatalog.Find(settings.Theme.Name),
+                _startingDirectory)).ConfigureAwait(false);
 
         if (Volatile.Read(ref _disposed) != 0)
         {

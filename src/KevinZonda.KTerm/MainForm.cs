@@ -28,10 +28,10 @@ internal sealed class MainForm : Form
     private bool _allowClose;
     private bool _settingsOpen;
 
-    internal MainForm()
+    internal MainForm(string startingDirectory)
     {
         _settings = _settingsStore.Load();
-        _sessions = new TerminalSessionManager(_settings);
+        _sessions = new TerminalSessionManager(_settings, startingDirectory);
         Text = "KTerm";
         BackColor = Color.FromArgb(12, 15, 20);
         ClientSize = new Size(1100, 720);
