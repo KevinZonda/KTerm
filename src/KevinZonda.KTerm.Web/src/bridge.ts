@@ -56,6 +56,10 @@ export class NativeBridge {
     this.send('session.close', {}, sessionId);
   }
 
+  public beginWindowResize(edge: string): void {
+    this.send('window.resize', { edge });
+  }
+
   public writeClipboard(text: string): void {
     this.send('clipboard.write', { text });
   }
@@ -144,4 +148,3 @@ export class NativeBridge {
     return typeof value === 'number' ? value : 0;
   }
 }
-

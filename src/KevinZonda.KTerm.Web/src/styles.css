@@ -189,6 +189,8 @@ button {
 }
 
 .terminal-host .xterm-viewport {
+  background-color: #0c0f14;
+  overflow-x: hidden;
   scrollbar-color: #3b4655 transparent;
   scrollbar-width: thin;
 }
@@ -237,6 +239,79 @@ button {
 #status.error {
   border-color: #bf616a;
   color: #ffccd0;
+}
+
+.window-resize-handle {
+  position: fixed;
+  z-index: 100;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.window-resize-top,
+.window-resize-bottom {
+  right: 10px;
+  left: 10px;
+  height: 6px;
+}
+
+.window-resize-top {
+  top: 0;
+  cursor: n-resize;
+}
+
+.window-resize-bottom {
+  bottom: 0;
+  cursor: s-resize;
+}
+
+.window-resize-left,
+.window-resize-right {
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+}
+
+.window-resize-left {
+  left: 0;
+  cursor: w-resize;
+}
+
+.window-resize-right {
+  right: 0;
+  cursor: e-resize;
+}
+
+.window-resize-top-left,
+.window-resize-top-right,
+.window-resize-bottom-left,
+.window-resize-bottom-right {
+  width: 10px;
+  height: 10px;
+}
+
+.window-resize-top-left {
+  top: 0;
+  left: 0;
+  cursor: nw-resize;
+}
+
+.window-resize-top-right {
+  top: 0;
+  right: 0;
+  cursor: ne-resize;
+}
+
+.window-resize-bottom-left {
+  bottom: 0;
+  left: 0;
+  cursor: sw-resize;
+}
+
+.window-resize-bottom-right {
+  right: 0;
+  bottom: 0;
+  cursor: se-resize;
 }
 
 .empty-state,

@@ -24,6 +24,7 @@ internal static class NativeMethods
     internal const int DwmBorderColor = 34;
     internal const int DwmCaptionColor = 35;
     internal const int DwmTextColor = 36;
+    internal const uint MonitorDefaultToNearest = 0x0000_0002;
 
     internal const uint ExtendedStartupInfoPresent = 0x0008_0000;
     internal const uint CreateUnicodeEnvironment = 0x0000_0400;
@@ -43,6 +44,41 @@ internal static class NativeMethods
             X = checked((short)columns);
             Y = checked((short)rows);
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativePoint
+    {
+        internal int X;
+        internal int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeRect
+    {
+        internal int Left;
+        internal int Top;
+        internal int Right;
+        internal int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MinMaxInfo
+    {
+        internal NativePoint Reserved;
+        internal NativePoint MaxSize;
+        internal NativePoint MaxPosition;
+        internal NativePoint MinTrackSize;
+        internal NativePoint MaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MonitorInfo
+    {
+        internal int Size;
+        internal NativeRect Monitor;
+        internal NativeRect WorkArea;
+        internal uint Flags;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -187,6 +223,32 @@ internal static class NativeMethods
         int width,
         int height,
         uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern IntPtr SendMessageW(
+        IntPtr hWnd,
+        uint message,
+        IntPtr wParam,
+        IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsZoomed(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo monitorInfo);
 
     [DllImport("dwmapi.dll")]
     internal static extern int DwmSetWindowAttribute(

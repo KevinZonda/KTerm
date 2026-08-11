@@ -18,14 +18,19 @@ internal sealed class WebViewBridge : IDisposable
 
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
+    private readonly Action<string> _beginWindowResize;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _outputQueues = new();
     private readonly System.Windows.Forms.Timer _outputTimer;
     private int _disposed;
 
-    internal WebViewBridge(WebView2 webView, TerminalSessionManager sessions)
+    internal WebViewBridge(
+        WebView2 webView,
+        TerminalSessionManager sessions,
+        Action<string> beginWindowResize)
     {
         _webView = webView;
         _sessions = sessions;
+        _beginWindowResize = beginWindowResize;
         _sessions.OutputReceived += QueueOutput;
         _sessions.SessionExited += QueueExit;
         _webView.CoreWebView2.WebMessageReceived += HandleMessage;
@@ -100,6 +105,10 @@ internal sealed class WebViewBridge : IDisposable
                     {
                         Clipboard.SetText(text);
                     }
+                    break;
+
+                case "window.resize":
+                    _beginWindowResize(GetString(message.Payload, "edge"));
                     break;
 
                 default:
