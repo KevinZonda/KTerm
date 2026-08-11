@@ -16,7 +16,7 @@ internal sealed class SettingsForm : Form
     private readonly NumericUpDown _fontSize = new();
     private readonly NumericUpDown _lineHeight = new();
     private readonly Label _preview = new();
-    private Font? _previewFont;
+    private readonly List<Font> _previewFonts = [];
 
     internal SettingsForm(AppSettings settings)
     {
@@ -61,12 +61,17 @@ internal sealed class SettingsForm : Form
 
     protected override void Dispose(bool disposing)
     {
+        base.Dispose(disposing);
+
         if (disposing)
         {
-            _previewFont?.Dispose();
-        }
+            foreach (var previewFont in _previewFonts)
+            {
+                previewFont.Dispose();
+            }
 
-        base.Dispose(disposing);
+            _previewFonts.Clear();
+        }
     }
 
     private Control CreateLayout()
@@ -209,10 +214,9 @@ internal sealed class SettingsForm : Form
 
     private void UpdatePreview()
     {
-        var previousFont = _previewFont;
-        _previewFont = CreatePreviewFont();
-        _preview.Font = _previewFont;
-        previousFont?.Dispose();
+        var previewFont = CreatePreviewFont();
+        _previewFonts.Add(previewFont);
+        _preview.Font = previewFont;
     }
 
     private Font CreatePreviewFont()
