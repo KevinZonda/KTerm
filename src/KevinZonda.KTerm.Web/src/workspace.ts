@@ -226,9 +226,7 @@ export class Workspace implements TerminalCallbacks {
     this.workspace.replaceChildren(this.renderNode(tab.root));
     this.terminals.forEach((terminal, id) => terminal.setFocused(id === tab.focusedSessionId));
 
-    requestAnimationFrame(() => {
-      this.collectSessions(tab.root).forEach(id => this.terminals.get(id)?.mount());
-    });
+    this.collectSessions(tab.root).forEach(id => this.terminals.get(id)?.mount());
   }
 
   private renderTabs(): void {
