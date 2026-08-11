@@ -4,7 +4,6 @@ WEB_DIR := src/KevinZonda.KTerm.Web
 SMOKE_TEST := scripts/smoke.ps1
 
 CONFIG ?= Debug
-RID ?= win-x64
 
 .DEFAULT_GOAL := build
 
@@ -19,7 +18,7 @@ help:
 	@echo "  make test      - run the 2x2 ConPTY smoke test"
 	@echo "  make format    - verify C# formatting"
 	@echo "  make audit     - audit NuGet and npm dependencies"
-	@echo "  make publish   - publish framework-dependent RID=win-x64"
+	@echo "  make publish   - publish ReadyToRun framework-dependent win-x64"
 	@echo "  make clean     - clean .NET build outputs"
 
 install: restore
@@ -48,7 +47,7 @@ audit:
 	npm audit --prefix $(WEB_DIR) --audit-level=high
 
 publish:
-	dotnet publish $(PROJECT) -c Release -r $(RID) --self-contained false --nologo
+	dotnet publish $(PROJECT) -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true --nologo
 
 clean:
 	dotnet clean $(SOLUTION) -c $(CONFIG) --nologo

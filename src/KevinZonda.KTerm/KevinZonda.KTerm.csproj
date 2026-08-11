@@ -12,6 +12,11 @@
     <WebProjectDir>$(MSBuildProjectDirectory)\..\KevinZonda.KTerm.Web</WebProjectDir>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' == 'win-x64'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4181-prerelease" />
   </ItemGroup>

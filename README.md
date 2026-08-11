@@ -46,10 +46,10 @@ dotnet run --project src\KevinZonda.KTerm\KevinZonda.KTerm.csproj
 powershell -ExecutionPolicy Bypass -File scripts\smoke.ps1
 ```
 
-发布 framework-dependent win-x64 版本：
+发布启用 ReadyToRun 的 framework-dependent win-x64 版本：
 
 ```powershell
-dotnet publish src\KevinZonda.KTerm\KevinZonda.KTerm.csproj -c Release -r win-x64 --self-contained false
+dotnet publish src\KevinZonda.KTerm\KevinZonda.KTerm.csproj -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true
 ```
 
 详细架构、消息协议与验收标准参见 [docs/plan.md](docs/plan.md)。
