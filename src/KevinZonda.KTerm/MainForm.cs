@@ -16,9 +16,7 @@ internal sealed class MainForm : Form
     private const int WmGetMinMaxInfo = 0x0024;
     private const int WmWindowPosChanged = 0x0047;
     private const int WmNcCalcSize = 0x0083;
-    private const int WmNcHitTest = 0x0084;
     private const uint WmNcLeftButtonDown = 0x00A1;
-    private const int HtClient = 1;
     private const int HtLeft = 10;
     private const int HtRight = 11;
     private const int HtTop = 12;
@@ -85,57 +83,26 @@ internal sealed class MainForm : Form
 
     protected override void WndProc(ref Message message)
     {
-        if (message.Msg == WmGetMinMaxInfo)
+        if (_customFrameActive && message.Msg == WmGetMinMaxInfo)
         {
             base.WndProc(ref message);
             ApplyMaximizedBounds(message.LParam);
             return;
         }
 
-        if (message.Msg == WmNcCalcSize)
+        if (_customFrameActive && message.Msg == WmNcCalcSize)
         {
             message.Result = IntPtr.Zero;
             return;
         }
 
-        if (message.Msg == WmWindowPosChanged)
+        if (_customFrameActive && message.Msg == WmWindowPosChanged)
         {
             HandleWindowPositionChanged(ref message);
             return;
         }
 
         base.WndProc(ref message);
-
-        if (message.Msg != WmNcHitTest ||
-            NativeMethods.IsZoomed(Handle) ||
-            message.Result.ToInt32() != HtClient)
-        {
-            return;
-        }
-
-        var packedPoint = message.LParam.ToInt64();
-        var screenPoint = new Point(
-            unchecked((short)(packedPoint & 0xffff)),
-            unchecked((short)((packedPoint >> 16) & 0xffff)));
-        var clientPoint = PointToClient(screenPoint);
-        var resizeBorder = Math.Max(6, DeviceDpi * 8 / 96);
-        var left = clientPoint.X < resizeBorder;
-        var right = clientPoint.X >= ClientSize.Width - resizeBorder;
-        var top = clientPoint.Y < resizeBorder;
-        var bottom = clientPoint.Y >= ClientSize.Height - resizeBorder;
-
-        message.Result = (left, right, top, bottom) switch
-        {
-            (true, _, true, _) => (IntPtr)HtTopLeft,
-            (_, true, true, _) => (IntPtr)HtTopRight,
-            (true, _, _, true) => (IntPtr)HtBottomLeft,
-            (_, true, _, true) => (IntPtr)HtBottomRight,
-            (true, _, _, _) => (IntPtr)HtLeft,
-            (_, true, _, _) => (IntPtr)HtRight,
-            (_, _, true, _) => (IntPtr)HtTop,
-            (_, _, _, true) => (IntPtr)HtBottom,
-            _ => (IntPtr)HtClient
-        };
     }
 
     protected override void SetBoundsCore(
@@ -221,7 +188,7 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var hitTest = edge switch
+        int? hitTest = edge switch
         {
             "left" => HtLeft,
             "right" => HtRight,
@@ -231,9 +198,9 @@ internal sealed class MainForm : Form
             "bottom" => HtBottom,
             "bottom-left" => HtBottomLeft,
             "bottom-right" => HtBottomRight,
-            _ => HtClient
+            _ => null
         };
-        if (hitTest == HtClient)
+        if (hitTest is not int hitTestValue)
         {
             return;
         }
@@ -242,7 +209,7 @@ internal sealed class MainForm : Form
         NativeMethods.SendMessageW(
             Handle,
             WmNcLeftButtonDown,
-            (IntPtr)hitTest,
+            (IntPtr)hitTestValue,
             IntPtr.Zero);
     }
 
