@@ -23,7 +23,7 @@ internal sealed class SettingsForm : Form
         Text = "KTerm Settings";
         BackColor = SurfaceColor;
         ForeColor = Color.FromArgb(216, 222, 233);
-        ClientSize = new Size(520, 350);
+        ClientSize = new Size(520, 380);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -81,13 +81,12 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(22, 18, 22, 18),
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 4,
             BackColor = SurfaceColor
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var heading = new Label
@@ -138,7 +137,7 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             BackColor = FieldColor,
             Padding = new Padding(14),
-            Margin = new Padding(0, 0, 0, 12)
+            Margin = new Padding(0, 0, 0, 18)
         };
         previewPanel.Paint += (_, eventArgs) =>
             ControlPaint.DrawBorder(eventArgs.Graphics, previewPanel.ClientRectangle, BorderColor, ButtonBorderStyle.Solid);
@@ -151,7 +150,7 @@ internal sealed class SettingsForm : Form
 
         var actions = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 3,
             RowCount = 1,
@@ -184,7 +183,7 @@ internal sealed class SettingsForm : Form
         commitButtons.Controls.Add(cancel);
         commitButtons.Controls.Add(save);
         actions.Controls.Add(commitButtons, 2, 0);
-        root.Controls.Add(actions, 0, 4);
+        root.Controls.Add(actions, 0, 3);
 
         AcceptButton = save;
         CancelButton = cancel;
