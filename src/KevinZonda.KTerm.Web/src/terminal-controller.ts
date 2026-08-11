@@ -11,6 +11,9 @@ export interface TerminalCallbacks {
 }
 
 export class TerminalController {
+  private static readonly MIN_FONT_SIZE = 8;
+  private static readonly MAX_FONT_SIZE = 72;
+
   public readonly sessionId: string;
   public readonly element: HTMLDivElement;
 
@@ -76,6 +79,7 @@ export class TerminalController {
     this.element.addEventListener('pointerdown', () => this.focus());
     this.element.addEventListener('focusin', () => this.callbacks.onFocus(this.sessionId));
     this.host.addEventListener('contextmenu', this.handleContextMenu, { capture: true });
+    this.host.addEventListener('wheel', this.handleWheel, { capture: true, passive: false });
     this.resizeObserver = new ResizeObserver(() => this.scheduleFit());
     this.resizeObserver.observe(this.element);
   }
@@ -163,6 +167,7 @@ export class TerminalController {
     if (this.fitTimer !== undefined) {
       window.clearTimeout(this.fitTimer);
     }
+    this.host.removeEventListener('wheel', this.handleWheel, { capture: true });
     this.resizeObserver.disconnect();
     this.disposables.forEach(disposable => disposable.dispose());
     this.webglAddon?.dispose();
@@ -225,6 +230,31 @@ export class TerminalController {
     void this.bridge.readClipboard()
       .then(text => this.paste(text))
       .catch(error => console.error('Unable to paste clipboard text.', error));
+  };
+
+  private readonly handleWheel = (event: WheelEvent): void => {
+    if (!event.ctrlKey || event.deltaY === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const currentSize = this.terminal.options.fontSize ?? 14;
+    const nextSize = Math.min(
+      TerminalController.MAX_FONT_SIZE,
+      Math.max(
+        TerminalController.MIN_FONT_SIZE,
+        currentSize + (event.deltaY < 0 ? 1 : -1)
+      )
+    );
+    if (nextSize === currentSize) {
+      return;
+    }
+
+    this.terminal.options.fontSize = nextSize;
+    this.scheduleFit();
+    this.focus();
   };
 
 }
