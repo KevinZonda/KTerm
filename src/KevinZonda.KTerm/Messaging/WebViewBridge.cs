@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using KevinZonda.KTerm.Configuration;
 using KevinZonda.KTerm.Terminal;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -19,18 +20,24 @@ internal sealed class WebViewBridge : IDisposable
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
     private readonly Action<string> _beginWindowResize;
+    private readonly Action _openSettings;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _outputQueues = new();
     private readonly System.Windows.Forms.Timer _outputTimer;
+    private AppSettings _settings;
     private int _disposed;
 
     internal WebViewBridge(
         WebView2 webView,
         TerminalSessionManager sessions,
-        Action<string> beginWindowResize)
+        Action<string> beginWindowResize,
+        Action openSettings,
+        AppSettings settings)
     {
         _webView = webView;
         _sessions = sessions;
         _beginWindowResize = beginWindowResize;
+        _openSettings = openSettings;
+        _settings = settings;
         _sessions.OutputReceived += QueueOutput;
         _sessions.SessionExited += QueueExit;
         _webView.CoreWebView2.WebMessageReceived += HandleMessage;
@@ -48,6 +55,12 @@ internal sealed class WebViewBridge : IDisposable
 
     internal void SendWorkspaceCommand(string command) =>
         Post("workspace.command", payload: new { command });
+
+    internal void SendSettingsChanged(AppSettings settings)
+    {
+        _settings = settings;
+        Post("app.settingsChanged", payload: new { settings });
+    }
 
     private async void HandleMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs eventArgs)
     {
@@ -67,7 +80,8 @@ internal sealed class WebViewBridge : IDisposable
                     Post("app.initialState", message.RequestId, payload: new
                     {
                         application = "KevinZonda.KTerm",
-                        version = Application.ProductVersion
+                        version = Application.ProductVersion,
+                        settings = _settings
                     });
                     break;
 
@@ -109,6 +123,10 @@ internal sealed class WebViewBridge : IDisposable
 
                 case "window.resize":
                     _beginWindowResize(GetString(message.Payload, "edge"));
+                    break;
+
+                case "window.settings":
+                    _webView.BeginInvoke(_openSettings);
                     break;
 
                 default:

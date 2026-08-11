@@ -4,6 +4,24 @@ export interface SessionCreated {
   processId: number;
 }
 
+export interface FontSettings {
+  family: string;
+  size: number;
+  lineHeight: number;
+}
+
+export interface AppSettings {
+  font: FontSettings;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  font: {
+    family: 'Cascadia Mono, Cascadia Code, Consolas, monospace',
+    size: 14,
+    lineHeight: 1.12
+  }
+};
+
 export interface BridgeEvent {
   version: number;
   type: string;
@@ -27,8 +45,9 @@ export class NativeBridge {
     window.chrome.webview.addEventListener('message', this.handleMessage);
   }
 
-  public async ready(): Promise<void> {
-    await this.request('app.ready', {});
+  public async ready(): Promise<AppSettings> {
+    const event = await this.request('app.ready', {});
+    return this.settingsFrom(event);
   }
 
   public async createSession(cols = 80, rows = 24): Promise<SessionCreated> {
@@ -58,6 +77,34 @@ export class NativeBridge {
 
   public beginWindowResize(edge: string): void {
     this.send('window.resize', { edge });
+  }
+
+  public openSettings(): void {
+    this.send('window.settings', {});
+  }
+
+  public settingsFrom(event: BridgeEvent): AppSettings {
+    const settings = event.payload.settings;
+    if (typeof settings !== 'object' || settings === null) {
+      return structuredClone(DEFAULT_SETTINGS);
+    }
+
+    const font = (settings as Partial<AppSettings>).font;
+    if (typeof font !== 'object' || font === null) {
+      return structuredClone(DEFAULT_SETTINGS);
+    }
+
+    const family = typeof font.family === 'string' && font.family.trim()
+      ? font.family.trim()
+      : DEFAULT_SETTINGS.font.family;
+    const size = typeof font.size === 'number' && Number.isFinite(font.size)
+      ? Math.min(72, Math.max(8, font.size))
+      : DEFAULT_SETTINGS.font.size;
+    const lineHeight = typeof font.lineHeight === 'number' && Number.isFinite(font.lineHeight)
+      ? Math.min(2, Math.max(0.8, font.lineHeight))
+      : DEFAULT_SETTINGS.font.lineHeight;
+
+    return { font: { family, size, lineHeight } };
   }
 
   public writeClipboard(text: string): void {

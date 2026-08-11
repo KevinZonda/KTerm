@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using KevinZonda.KTerm.Configuration;
 using KevinZonda.KTerm.Interop;
 using KevinZonda.KTerm.Messaging;
 using KevinZonda.KTerm.Terminal;
@@ -32,6 +33,8 @@ internal sealed class MainForm : Form
 
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions = new();
+    private readonly SettingsStore _settingsStore = new();
+    private AppSettings _settings;
     private WebViewBridge? _bridge;
     private CoreWebView2Environment? _webViewEnvironment;
     private CoreWebView2WindowControlsOverlay? _windowControlsOverlay;
@@ -41,9 +44,11 @@ internal sealed class MainForm : Form
     private Rectangle _restoreBoundsOverride;
     private bool _allowClose;
     private bool _customFrameActive = true;
+    private bool _settingsOpen;
 
     internal MainForm()
     {
+        _settings = _settingsStore.Load();
         Text = "KTerm";
         BackColor = Color.FromArgb(12, 15, 20);
         ClientSize = new Size(1100, 720);
@@ -279,7 +284,12 @@ internal sealed class MainForm : Form
         core.NewWindowRequested += HandleNewWindowRequested;
         core.ProcessFailed += HandleProcessFailed;
         ConfigureWindowControlsOverlay(core);
-        _bridge = new WebViewBridge(_webView, _sessions, BeginWindowResize);
+        _bridge = new WebViewBridge(
+            _webView,
+            _sessions,
+            BeginWindowResize,
+            ShowSettings,
+            _settings);
 
         core.Navigate($"https://{AppHostName}/index.html");
     }
@@ -529,6 +539,12 @@ internal sealed class MainForm : Form
     {
         if ((keyData & Keys.Modifiers) == Keys.Alt)
         {
+            if ((keyData & Keys.KeyCode) == Keys.S)
+            {
+                ShowSettings();
+                return true;
+            }
+
             var command = (keyData & Keys.KeyCode) switch
             {
                 Keys.T => "newTab",
@@ -545,6 +561,43 @@ internal sealed class MainForm : Form
         }
 
         return base.ProcessCmdKey(ref message, keyData);
+    }
+
+    private async void ShowSettings()
+    {
+        if (_settingsOpen || IsDisposed)
+        {
+            return;
+        }
+
+        _settingsOpen = true;
+        try
+        {
+            using var settingsForm = new SettingsForm(_settings);
+            if (settingsForm.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            try
+            {
+                _settings = await _settingsStore.SaveAsync(settingsForm.Settings);
+                _bridge?.SendSettingsChanged(_settings);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show(
+                    this,
+                    $"KTerm could not save settings.\n\n{exception.Message}",
+                    "KTerm settings",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+        finally
+        {
+            _settingsOpen = false;
+        }
     }
 
     private async void HandleFormClosing(object? sender, FormClosingEventArgs eventArgs)

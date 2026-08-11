@@ -1,4 +1,5 @@
-import type { BridgeEvent, NativeBridge, SessionCreated } from './bridge';
+import { DEFAULT_SETTINGS } from './bridge';
+import type { AppSettings, BridgeEvent, NativeBridge, SessionCreated } from './bridge';
 import { TerminalController } from './terminal-controller';
 import type { TerminalCallbacks } from './terminal-controller';
 
@@ -30,6 +31,7 @@ export class Workspace implements TerminalCallbacks {
   private readonly earlyOutput = new Map<string, string[]>();
   private readonly tabs: TabState[] = [];
   private activeTabId?: string;
+  private settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
   private operationPending = false;
 
   public constructor(bridge: NativeBridge) {
@@ -41,6 +43,7 @@ export class Workspace implements TerminalCallbacks {
     this.bridge.on('session.output', event => this.handleOutput(event));
     this.bridge.on('session.exited', event => this.handleExit(event));
     this.bridge.on('workspace.command', event => this.executeCommand(this.payloadString(event, 'command')));
+    this.bridge.on('app.settingsChanged', event => this.applySettings(this.bridge.settingsFrom(event)));
     this.bridge.on('app.runtimeFailed', event => {
       this.setStatus(`WebView2 process failed: ${this.payloadString(event, 'kind')}`, true);
     });
@@ -50,7 +53,7 @@ export class Workspace implements TerminalCallbacks {
 
   public async initialize(): Promise<void> {
     this.setStatus('Starting KTerm…');
-    await this.bridge.ready();
+    this.applySettings(await this.bridge.ready());
     await this.createTab();
     this.setStatus('');
   }
@@ -144,6 +147,9 @@ export class Workspace implements TerminalCallbacks {
         case 'Minus':
           this.executeCommand('splitRows');
           break;
+        case 'KeyS':
+          this.bridge.openSettings();
+          break;
         default:
           handled = false;
       }
@@ -183,7 +189,7 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private addTerminal(session: SessionCreated): void {
-    const terminal = new TerminalController(session, this.bridge, this);
+    const terminal = new TerminalController(session, this.bridge, this, this.settings.font);
     this.terminals.set(session.sessionId, terminal);
 
     const pending = this.earlyOutput.get(session.sessionId);
@@ -191,6 +197,11 @@ export class Workspace implements TerminalCallbacks {
       pending.forEach(data => terminal.write(data));
       this.earlyOutput.delete(session.sessionId);
     }
+  }
+
+  private applySettings(settings: AppSettings): void {
+    this.settings = settings;
+    this.terminals.forEach(terminal => terminal.applyFontSettings(settings.font));
   }
 
   private handleOutput(event: BridgeEvent): void {

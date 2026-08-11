@@ -2,7 +2,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import type { IDisposable } from '@xterm/xterm';
-import type { NativeBridge, SessionCreated } from './bridge';
+import type { FontSettings, NativeBridge, SessionCreated } from './bridge';
 
 export interface TerminalCallbacks {
   onFocus(sessionId: string): void;
@@ -29,7 +29,12 @@ export class TerminalController {
   private lastCols = 0;
   private lastRows = 0;
 
-  public constructor(session: SessionCreated, bridge: NativeBridge, callbacks: TerminalCallbacks) {
+  public constructor(
+    session: SessionCreated,
+    bridge: NativeBridge,
+    callbacks: TerminalCallbacks,
+    font: FontSettings
+  ) {
     this.sessionId = session.sessionId;
     this.shellName = session.shellName;
     this.bridge = bridge;
@@ -47,9 +52,9 @@ export class TerminalController {
       convertEol: false,
       cursorBlink: true,
       cursorStyle: 'bar',
-      fontFamily: 'Cascadia Mono, Cascadia Code, Consolas, monospace',
-      fontSize: 14,
-      lineHeight: 1.12,
+      fontFamily: font.family,
+      fontSize: font.size,
+      lineHeight: font.lineHeight,
       scrollback: 5000,
       theme: {
         background: '#0c0f14',
@@ -137,6 +142,15 @@ export class TerminalController {
 
   public setFocused(focused: boolean): void {
     this.element.classList.toggle('focused', focused);
+  }
+
+  public applyFontSettings(font: FontSettings): void {
+    this.terminal.options.fontFamily = font.family;
+    this.terminal.options.fontSize = font.size;
+    this.terminal.options.lineHeight = font.lineHeight;
+    if (this.opened) {
+      this.scheduleFit();
+    }
   }
 
   public scheduleFit(): void {
