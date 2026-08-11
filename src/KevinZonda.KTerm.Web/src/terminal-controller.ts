@@ -93,6 +93,7 @@ export class TerminalController {
 
     this.element.addEventListener('pointerdown', () => this.focus());
     this.element.addEventListener('focusin', () => this.callbacks.onFocus(this.sessionId));
+    this.host.addEventListener('contextmenu', this.handleContextMenu, { capture: true });
     this.resizeObserver = new ResizeObserver(() => this.scheduleFit());
     this.resizeObserver.observe(this.element);
   }
@@ -165,7 +166,7 @@ export class TerminalController {
 
   public paste(text: string): void {
     if (text) {
-      this.bridge.sendInput(this.sessionId, text);
+      this.terminal.paste(text);
     }
   }
 
@@ -197,6 +198,19 @@ export class TerminalController {
       this.element.classList.add('renderer-fallback');
     }
   }
+
+  private readonly handleContextMenu = (event: MouseEvent): void => {
+    if (this.terminal.modes.mouseTrackingMode !== 'none') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.focus();
+    void this.bridge.readClipboard()
+      .then(text => this.paste(text))
+      .catch(error => console.error('Unable to paste clipboard text.', error));
+  };
 
   private createCloseButton(): HTMLButtonElement {
     const close = document.createElement('button');
