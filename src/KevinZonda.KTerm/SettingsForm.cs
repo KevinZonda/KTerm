@@ -23,6 +23,8 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _shellExecutable = new();
     private readonly TextBox _shellArguments = new();
     private readonly Button _shellBrowse = new();
+    private readonly ComboBox _msys2Environment = new();
+    private readonly CheckBox _inheritWindowsPath = new();
     private readonly List<Font> _previewFonts = [];
     private TabPage? _shellPage;
     private bool _applyingShellValues;
@@ -32,7 +34,7 @@ internal sealed class SettingsForm : Form
         Text = "KTerm Settings";
         BackColor = SurfaceColor;
         ForeColor = Color.FromArgb(216, 222, 233);
-        ClientSize = new Size(520, 380);
+        ClientSize = new Size(520, 430);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -45,6 +47,7 @@ internal sealed class SettingsForm : Form
         PopulateFonts();
         PopulateThemes();
         PopulateShellProfiles();
+        PopulateMsys2Environments();
         ApplyValues(settings);
         UpdatePreview();
     }
@@ -226,23 +229,25 @@ internal sealed class SettingsForm : Form
             BackColor = SurfaceColor,
             ForeColor = ForeColor,
             Padding = new Padding(16),
-            UseVisualStyleBackColor = false
+            UseVisualStyleBackColor = false,
+            AutoScroll = true
         };
 
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
             ColumnCount = 1,
-            RowCount = 7,
+            RowCount = 9,
             BackColor = SurfaceColor,
             Margin = new Padding(0)
         };
-        for (var row = 0; row < 6; row++)
+        for (var row = 0; row < 9; row++)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
 
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.Controls.Add(CreateLabel("Shell profile"), 0, 0);
 
         ConfigureField(_shellProfile);
@@ -280,14 +285,29 @@ internal sealed class SettingsForm : Form
         _shellArguments.Margin = new Padding(0, 5, 0, 12);
         layout.Controls.Add(_shellArguments, 0, 5);
 
-        layout.Controls.Add(new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = SurfaceColor,
-            Margin = new Padding(0)
-        }, 0, 6);
+        layout.Controls.Add(CreateLabel("MSYS2 environment"), 0, 6);
+        ConfigureField(_msys2Environment);
+        _msys2Environment.DropDownStyle = ComboBoxStyle.DropDownList;
+        _msys2Environment.Margin = new Padding(0, 5, 0, 10);
+        layout.Controls.Add(_msys2Environment, 0, 7);
+
+        _inheritWindowsPath.AutoSize = true;
+        _inheritWindowsPath.Text = "Inherit Windows PATH (Git, Node, pnpm, etc.)";
+        _inheritWindowsPath.BackColor = SurfaceColor;
+        _inheritWindowsPath.ForeColor = Color.FromArgb(216, 222, 233);
+        _inheritWindowsPath.Margin = new Padding(0);
+        _inheritWindowsPath.UseVisualStyleBackColor = false;
+        layout.Controls.Add(_inheritWindowsPath, 0, 8);
+
         page.Controls.Add(layout);
         return page;
+    }
+
+    private void UpdateMsys2Controls(ShellProfileDefinition profile)
+    {
+        var enabled = profile.Id == ShellProfileCatalog.Msys2ZshId;
+        _msys2Environment.Enabled = enabled;
+        _inheritWindowsPath.Enabled = enabled;
     }
 
     private TabPage CreateThemePage()
@@ -393,6 +413,14 @@ internal sealed class SettingsForm : Form
         _shellProfile.Items.AddRange(ShellProfileCatalog.All.Cast<object>().ToArray());
     }
 
+    private void PopulateMsys2Environments()
+    {
+        _msys2Environment.Items.AddRange(
+            ShellProfileCatalog.Msys2Environments.Cast<object>().ToArray());
+        _msys2Environment.SelectedItem = ShellProfileCatalog.DefaultMsys2Environment;
+        _inheritWindowsPath.Checked = true;
+    }
+
     private void ApplyValues(AppSettings settings)
     {
         var normalized = AppSettings.Normalize(settings);
@@ -422,8 +450,11 @@ internal sealed class SettingsForm : Form
                 ? string.Empty
                 : normalized.Executable ?? string.Empty;
             _shellArguments.Text = normalized.Arguments ?? profile.DefaultArguments;
+            _msys2Environment.SelectedItem = normalized.Msys2Environment;
+            _inheritWindowsPath.Checked = normalized.InheritWindowsPath;
             _shellExecutable.ReadOnly = profile.Id == ShellProfileCatalog.AutoId;
             _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
+            UpdateMsys2Controls(profile);
         }
         finally
         {
@@ -445,6 +476,7 @@ internal sealed class SettingsForm : Form
             _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
             _shellExecutable.Clear();
             _shellArguments.Text = profile.DefaultArguments;
+            UpdateMsys2Controls(profile);
         }
         finally
         {
@@ -464,7 +496,9 @@ internal sealed class SettingsForm : Form
             Executable = profile.Id == ShellProfileCatalog.AutoId ? null : _shellExecutable.Text,
             Arguments = profile.Id == ShellProfileCatalog.AutoId
                 ? null
-                : _shellArguments.Text
+                : _shellArguments.Text,
+            Msys2Environment = _msys2Environment.Text,
+            InheritWindowsPath = _inheritWindowsPath.Checked
         };
     }
 

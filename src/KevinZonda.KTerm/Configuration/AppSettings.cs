@@ -66,6 +66,10 @@ internal sealed record ShellSettings
 
     public string? Arguments { get; init; }
 
+    public string Msys2Environment { get; init; } = ShellProfileCatalog.DefaultMsys2Environment;
+
+    public bool InheritWindowsPath { get; init; } = true;
+
     internal static ShellSettings Normalize(ShellSettings? settings)
     {
         var profile = ShellProfileCatalog.Find(settings?.Profile);
@@ -75,7 +79,10 @@ internal sealed record ShellSettings
         {
             Profile = profile.Id,
             Executable = executable,
-            Arguments = arguments
+            Arguments = arguments,
+            Msys2Environment = ShellProfileCatalog.NormalizeMsys2Environment(
+                settings?.Msys2Environment),
+            InheritWindowsPath = settings?.InheritWindowsPath ?? true
         };
     }
 

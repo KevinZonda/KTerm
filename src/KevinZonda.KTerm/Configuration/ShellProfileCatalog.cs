@@ -20,6 +20,16 @@ internal static class ShellProfileCatalog
     internal const string Msys2ZshId = "msys2-zsh";
     internal const string GitBashId = "git-bash";
     internal const string CustomId = "custom";
+    internal const string DefaultMsys2Environment = "UCRT64";
+
+    internal static IReadOnlyList<string> Msys2Environments { get; } =
+    [
+        DefaultMsys2Environment,
+        "CLANG64",
+        "CLANGARM64",
+        "MINGW64",
+        "MSYS"
+    ];
 
     internal static IReadOnlyList<ShellProfileDefinition> All { get; } =
     [
@@ -37,6 +47,11 @@ internal static class ShellProfileCatalog
             profile => string.Equals(profile.Id, id, StringComparison.OrdinalIgnoreCase))
         ?? All[0];
 
+    internal static string NormalizeMsys2Environment(string? environment) =>
+        Msys2Environments.FirstOrDefault(
+            candidate => string.Equals(candidate, environment, StringComparison.OrdinalIgnoreCase))
+        ?? DefaultMsys2Environment;
+
     internal static ShellLaunchSpec Resolve(ShellSettings settings)
     {
         var normalized = ShellSettings.Normalize(settings);
@@ -47,18 +62,28 @@ internal static class ShellProfileCatalog
             PowerShell7Id => Create(profile, normalized),
             WindowsPowerShellId => Create(profile, normalized),
             CommandPromptId => Create(profile, normalized),
-            Msys2ZshId => Create(
-                profile,
-                normalized,
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["MSYSTEM"] = "MSYS",
-                    ["CHERE_INVOKING"] = "1"
-                }),
+            Msys2ZshId => CreateMsys2Zsh(profile, normalized),
             GitBashId => Create(profile, normalized),
             CustomId => Create(profile, normalized),
             _ => ResolveAuto()
         };
+    }
+
+    private static ShellLaunchSpec CreateMsys2Zsh(
+        ShellProfileDefinition profile,
+        ShellSettings settings)
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["MSYSTEM"] = settings.Msys2Environment,
+            ["CHERE_INVOKING"] = "1"
+        };
+        if (settings.InheritWindowsPath)
+        {
+            environment["MSYS2_PATH_TYPE"] = "inherit";
+        }
+
+        return Create(profile, settings, environment);
     }
 
     private static ShellLaunchSpec ResolveAuto()
