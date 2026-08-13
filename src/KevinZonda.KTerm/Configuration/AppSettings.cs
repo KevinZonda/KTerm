@@ -3,7 +3,7 @@ namespace KevinZonda.KTerm.Configuration;
 internal sealed record AppSettings
 {
     internal const string DefaultFontFamily =
-        "Cascadia Mono, Cascadia Code, Consolas, monospace";
+        "Cascadia Mono, Cascadia Code, Consolas, Yu Gothic UI, monospace";
     internal const double DefaultFontSize = 14;
     internal const double DefaultLineHeight = 1.12;
 

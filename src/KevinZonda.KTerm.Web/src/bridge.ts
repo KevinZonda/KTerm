@@ -23,7 +23,7 @@ export interface ThemeSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   font: {
-    family: 'Cascadia Mono, Cascadia Code, Consolas, monospace',
+    family: 'Cascadia Mono, Cascadia Code, Consolas, Yu Gothic UI, monospace',
     size: 14,
     lineHeight: 1.12
   },
