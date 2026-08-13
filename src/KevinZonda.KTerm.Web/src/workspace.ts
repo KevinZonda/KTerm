@@ -27,24 +27,41 @@ interface PaneState {
   activeSessionId: string;
 }
 
+interface WorkspaceState {
+  id: string;
+  name: string;
+  panes: Map<string, PaneState>;
+  root?: LayoutNode;
+  focusedPaneId?: string;
+}
+
 export class Workspace implements TerminalCallbacks {
   private readonly bridge: NativeBridge;
+  private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
+  private readonly sidebar: HTMLElement;
+  private readonly workspaceList: HTMLElement;
   private readonly status: HTMLElement;
   private readonly terminals = new Map<string, TerminalController>();
   private readonly earlyOutput = new Map<string, string[]>();
-  private readonly panes = new Map<string, PaneState>();
+  private readonly closedSessionIds = new Set<string>();
+  private readonly workspaces: WorkspaceState[] = [];
   private readonly paneElements = new Map<string, HTMLElement>();
-  private root?: LayoutNode;
-  private focusedPaneId?: string;
+  private activeWorkspaceId?: string;
+  private nextWorkspaceNumber = 1;
+  private sidebarVisible = false;
   private settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
   private operationPending = false;
   private fontSaveTimer?: number;
 
   public constructor(bridge: NativeBridge) {
     this.bridge = bridge;
+    this.app = this.requireElement('app');
     this.workspace = this.requireElement('workspace');
+    this.sidebar = this.requireElement('workspace-sidebar');
+    this.workspaceList = this.requireElement('workspace-list');
     this.status = this.requireElement('status');
+    this.requireElement('new-workspace').addEventListener('click', () => void this.createWorkspace());
 
     this.bridge.on('session.output', event => this.handleOutput(event));
     this.bridge.on('session.exited', event => this.handleExit(event));
@@ -60,8 +77,12 @@ export class Workspace implements TerminalCallbacks {
   public async initialize(): Promise<void> {
     this.setStatus('Starting KTerm…');
     this.applySettings(await this.bridge.ready());
-    await this.createTab();
+    await this.createWorkspace();
     this.setStatus('');
+  }
+
+  public async createWorkspace(): Promise<void> {
+    await this.runExclusive(() => this.createWorkspaceCore());
   }
 
   public async createTab(paneId = this.focusedPaneId): Promise<void> {
@@ -105,13 +126,14 @@ export class Workspace implements TerminalCallbacks {
   }
 
   public onFocus(sessionId: string): void {
-    const pane = this.findPaneBySession(sessionId);
-    if (!pane) {
+    const match = this.findWorkspacePaneBySession(sessionId);
+    if (!match || match.workspace.id !== this.activeWorkspaceId) {
       return;
     }
 
+    const { pane, workspace } = match;
     pane.activeSessionId = sessionId;
-    this.focusedPaneId = pane.id;
+    workspace.focusedPaneId = pane.id;
     this.updateFocusState();
   }
 
@@ -137,7 +159,8 @@ export class Workspace implements TerminalCallbacks {
   }
 
   public onTitle(sessionId: string, title: string): void {
-    const pane = this.findPaneBySession(sessionId);
+    const match = this.findWorkspacePaneBySession(sessionId);
+    const pane = match?.pane;
     const tab = pane?.tabs.find(candidate => candidate.sessionId === sessionId);
     if (!pane || !tab || !title.trim()) {
       return;
@@ -166,6 +189,12 @@ export class Workspace implements TerminalCallbacks {
           break;
         case 'KeyS':
           this.bridge.openSettings();
+          break;
+        case 'KeyB':
+          this.executeCommand('toggleSidebar');
+          break;
+        case 'KeyN':
+          this.executeCommand('newWorkspace');
           break;
         default:
           handled = false;
@@ -202,7 +231,134 @@ export class Workspace implements TerminalCallbacks {
       case 'splitRows':
         void this.splitFocused('rows');
         break;
+      case 'toggleSidebar':
+        this.setSidebarVisible(!this.sidebarVisible);
+        break;
+      case 'newWorkspace':
+        void this.createWorkspace();
+        break;
     }
+  }
+
+  private async createWorkspaceCore(): Promise<void> {
+    this.setStatus('Starting workspace…');
+    const session = await this.bridge.createSession();
+    this.addTerminal(session);
+
+    const pane: PaneState = {
+      id: crypto.randomUUID(),
+      tabs: [this.createTerminalTab(session)],
+      activeSessionId: session.sessionId
+    };
+    const workspace: WorkspaceState = {
+      id: crypto.randomUUID(),
+      name: `Workspace ${this.nextWorkspaceNumber++}`,
+      panes: new Map([[pane.id, pane]]),
+      root: { type: 'pane', paneId: pane.id },
+      focusedPaneId: pane.id
+    };
+
+    this.workspaces.push(workspace);
+    this.activeWorkspaceId = workspace.id;
+    if (this.workspaces.length === 2) {
+      this.setSidebarVisible(true);
+    }
+    this.renderSidebar();
+    this.render();
+    this.focusSession(session.sessionId);
+    this.setStatus('');
+  }
+
+  private activateWorkspace(workspaceId: string): void {
+    if (this.operationPending || workspaceId === this.activeWorkspaceId ||
+        !this.workspaces.some(workspace => workspace.id === workspaceId)) {
+      return;
+    }
+
+    this.activeWorkspaceId = workspaceId;
+    this.renderSidebar();
+    this.render();
+    const focused = this.focusedPane;
+    if (focused) {
+      this.focusSession(focused.activeSessionId);
+    }
+  }
+
+  private closeWorkspace(workspaceId: string): void {
+    void this.runExclusive(async () => {
+      const index = this.workspaces.findIndex(workspace => workspace.id === workspaceId);
+      if (index < 0) {
+        return;
+      }
+
+      const workspace = this.workspaces[index]!;
+      const wasActive = workspace.id === this.activeWorkspaceId;
+      for (const pane of workspace.panes.values()) {
+        for (const tab of pane.tabs) {
+          this.destroyTerminal(tab.sessionId);
+          this.bridge.closeSession(tab.sessionId);
+        }
+      }
+
+      this.workspaces.splice(index, 1);
+      if (wasActive) {
+        this.activeWorkspaceId = this.workspaces[Math.min(index, this.workspaces.length - 1)]?.id;
+      }
+
+      if (this.workspaces.length === 0) {
+        this.renderSidebar();
+        this.render();
+        await this.createWorkspaceCore();
+        return;
+      }
+
+      this.renderSidebar();
+      if (wasActive) {
+        this.render();
+        const focused = this.focusedPane;
+        if (focused) {
+          this.focusSession(focused.activeSessionId);
+        }
+      }
+    });
+  }
+
+  private setSidebarVisible(visible: boolean): void {
+    this.sidebarVisible = visible;
+    this.app.classList.toggle('sidebar-visible', visible);
+    this.sidebar.setAttribute('aria-hidden', String(!visible));
+    this.fitVisibleTerminals();
+  }
+
+  private renderSidebar(): void {
+    const fragment = document.createDocumentFragment();
+    for (const workspace of this.workspaces) {
+      const item = document.createElement('div');
+      item.className = 'workspace-item';
+      item.classList.toggle('active', workspace.id === this.activeWorkspaceId);
+
+      const activate = document.createElement('button');
+      activate.type = 'button';
+      activate.className = 'workspace-activate';
+      activate.textContent = workspace.name;
+      activate.title = workspace.name;
+      activate.addEventListener('click', () => this.activateWorkspace(workspace.id));
+
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'workspace-close';
+      close.textContent = '×';
+      close.title = `Close ${workspace.name}`;
+      close.setAttribute('aria-label', `Close ${workspace.name}`);
+      close.addEventListener('click', event => {
+        event.stopPropagation();
+        this.closeWorkspace(workspace.id);
+      });
+
+      item.append(activate, close);
+      fragment.append(item);
+    }
+    this.workspaceList.replaceChildren(fragment);
   }
 
   private async createTabInPane(paneId?: string): Promise<void> {
@@ -244,6 +400,7 @@ export class Workspace implements TerminalCallbacks {
       this.settings.font,
       this.settings.theme
     );
+    this.closedSessionIds.delete(session.sessionId);
     this.terminals.set(session.sessionId, terminal);
 
     const pending = this.earlyOutput.get(session.sessionId);
@@ -272,7 +429,7 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private handleOutput(event: BridgeEvent): void {
-    if (!event.sessionId) {
+    if (!event.sessionId || this.closedSessionIds.has(event.sessionId)) {
       return;
     }
 
@@ -507,6 +664,7 @@ export class Workspace implements TerminalCallbacks {
     this.terminals.get(sessionId)?.dispose();
     this.terminals.delete(sessionId);
     this.earlyOutput.delete(sessionId);
+    this.closedSessionIds.add(sessionId);
   }
 
   private focusSession(sessionId: string): void {
@@ -525,7 +683,7 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private fitVisibleTerminals(): void {
-    this.panes.forEach(pane => {
+    this.activeWorkspace?.panes.forEach(pane => {
       this.terminals.get(pane.activeSessionId)?.scheduleFit();
     });
   }
@@ -587,10 +745,17 @@ export class Workspace implements TerminalCallbacks {
       : this.containsPane(node.first, paneId) || this.containsPane(node.second, paneId);
   }
 
-  private findPaneBySession(sessionId: string): PaneState | undefined {
-    return [...this.panes.values()].find(
-      pane => pane.tabs.some(tab => tab.sessionId === sessionId)
-    );
+  private findWorkspacePaneBySession(
+    sessionId: string
+  ): { workspace: WorkspaceState; pane: PaneState } | undefined {
+    for (const workspace of this.workspaces) {
+      for (const pane of workspace.panes.values()) {
+        if (pane.tabs.some(tab => tab.sessionId === sessionId)) {
+          return { workspace, pane };
+        }
+      }
+    }
+    return undefined;
   }
 
   private async runExclusive(operation: () => Promise<void>): Promise<void> {
@@ -659,5 +824,43 @@ export class Workspace implements TerminalCallbacks {
   private get focusedTerminal(): TerminalController | undefined {
     const pane = this.focusedPane;
     return pane ? this.terminals.get(pane.activeSessionId) : undefined;
+  }
+
+  private get activeWorkspace(): WorkspaceState | undefined {
+    return this.activeWorkspaceId
+      ? this.workspaces.find(workspace => workspace.id === this.activeWorkspaceId)
+      : undefined;
+  }
+
+  private get panes(): Map<string, PaneState> {
+    const workspace = this.activeWorkspace;
+    if (!workspace) {
+      throw new Error('No active workspace is available.');
+    }
+    return workspace.panes;
+  }
+
+  private get root(): LayoutNode | undefined {
+    return this.activeWorkspace?.root;
+  }
+
+  private set root(root: LayoutNode | undefined) {
+    const workspace = this.activeWorkspace;
+    if (!workspace) {
+      throw new Error('No active workspace is available.');
+    }
+    workspace.root = root;
+  }
+
+  private get focusedPaneId(): string | undefined {
+    return this.activeWorkspace?.focusedPaneId;
+  }
+
+  private set focusedPaneId(paneId: string | undefined) {
+    const workspace = this.activeWorkspace;
+    if (!workspace) {
+      throw new Error('No active workspace is available.');
+    }
+    workspace.focusedPaneId = paneId;
   }
 }

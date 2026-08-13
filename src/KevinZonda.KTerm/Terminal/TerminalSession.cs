@@ -173,7 +173,10 @@ internal sealed class TerminalSession : IAsyncDisposable
 
             _ = NativeMethods.CloseHandle(processInformation.hThread);
             process = new SafeKernelHandle(processInformation.hProcess);
-            ApplyConsoleTheme(processInformation.dwProcessId, theme);
+            if (shell.UseLegacyConsolePalette)
+            {
+                ApplyConsoleTheme(processInformation.dwProcessId, theme);
+            }
             inputStream = new FileStream(hostInput, FileAccess.Write, BufferSize, isAsync: false);
             outputStream = new FileStream(hostOutput, FileAccess.Read, BufferSize, isAsync: false);
 

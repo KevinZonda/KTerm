@@ -394,6 +394,8 @@ internal sealed class MainForm : Form
             var command = (keyData & Keys.KeyCode) switch
             {
                 Keys.T => "newTab",
+                Keys.B => "toggleSidebar",
+                Keys.N => "newWorkspace",
                 Keys.Oem5 => "splitColumns",
                 Keys.OemMinus => "splitRows",
                 _ => null

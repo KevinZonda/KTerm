@@ -9,7 +9,8 @@ internal sealed record ShellLaunchSpec(
     string DisplayName,
     string ExecutablePath,
     string Arguments,
-    IReadOnlyDictionary<string, string>? Environment = null);
+    IReadOnlyDictionary<string, string>? Environment = null,
+    bool UseLegacyConsolePalette = false);
 
 internal static class ShellProfileCatalog
 {
@@ -116,7 +117,8 @@ internal static class ShellProfileCatalog
                 return new ShellLaunchSpec(
                     profile.DisplayName,
                     executable,
-                    profile.DefaultArguments);
+                    profile.DefaultArguments,
+                    UseLegacyConsolePalette: true);
             }
         }
 
@@ -138,7 +140,8 @@ internal static class ShellProfileCatalog
             profile.DisplayName,
             executable,
             settings.Arguments ?? profile.DefaultArguments,
-            environment);
+            environment,
+            profile.Id is PowerShell7Id or WindowsPowerShellId or CommandPromptId);
     }
 
     private static string? ResolveManualExecutable(string? configured)
