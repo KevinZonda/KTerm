@@ -27,18 +27,22 @@ button {
 }
 
 #app {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 0 minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   background: #272d37;
+  transition: grid-template-columns 150ms cubic-bezier(0.4, 0, 1, 1);
 }
 
 #app.sidebar-visible {
   grid-template-columns: 220px minmax(0, 1fr);
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 #workspace-sidebar {
-  display: none;
+  display: grid;
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
@@ -47,26 +51,55 @@ button {
   overflow: hidden;
   background: #171b22;
   border-right: 1px solid #303845;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-12px);
+  pointer-events: none;
+  transition:
+    opacity 120ms ease-in,
+    transform 150ms cubic-bezier(0.4, 0, 1, 1),
+    visibility 0s linear 150ms;
 }
 
 #app.sidebar-visible > #workspace-sidebar {
-  display: grid;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  pointer-events: auto;
+  transition:
+    opacity 140ms ease-out 25ms,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
 }
 
-#app.sidebar-peek > #workspace-sidebar {
+#workspace-peek {
   position: absolute;
   z-index: 15;
   inset: 0 auto 0 0;
   display: grid;
   width: 40px;
-  grid-template-rows: minmax(0, 1fr);
   background: #171b22ed;
   box-shadow: 5px 0 18px #0008;
   backdrop-filter: blur(6px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-10px);
+  pointer-events: none;
+  transition:
+    opacity 100ms ease-in,
+    transform 100ms ease-in,
+    visibility 0s linear 100ms;
 }
 
-#app.sidebar-peek .workspace-sidebar-header {
-  display: none;
+#app.sidebar-peek > #workspace-peek {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  pointer-events: auto;
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
 }
 
 .workspace-sidebar-header {
@@ -115,16 +148,20 @@ button {
   scrollbar-width: thin;
 }
 
-#app.sidebar-peek #workspace-list {
+#workspace-peek-list {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 0;
+  min-height: 0;
   gap: 7px;
   padding: 9px 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-width: none;
 }
 
-#app.sidebar-peek #workspace-list::-webkit-scrollbar {
+#workspace-peek-list::-webkit-scrollbar {
   display: none;
 }
 
@@ -149,35 +186,44 @@ button {
   box-shadow: inset 2px 0 #5e81ac;
 }
 
-#app.sidebar-peek .workspace-item {
-  display: block;
+.workspace-peek-item {
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
-  margin: 0;
   border: 1px solid #46505e;
   border-radius: 5px;
   background: #29313d;
-  box-shadow: none;
+  transition:
+    border-color 100ms ease,
+    background-color 100ms ease,
+    box-shadow 100ms ease;
 }
 
-#app.sidebar-peek .workspace-item:hover {
+.workspace-peek-item:hover {
   border-color: #8290a3;
   background: #384352;
 }
 
-#app.sidebar-peek .workspace-item.active {
+.workspace-peek-item.active {
   border-color: #81a1c1;
   background: #5e81ac;
   box-shadow: 0 0 0 1px #5e81ac66;
 }
 
-#app.sidebar-peek .workspace-activate {
+.workspace-peek-activate {
   display: block;
   width: 100%;
   height: 100%;
   padding: 0;
+  border: 0;
   border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  transition: transform 100ms ease-out;
+}
+
+.workspace-peek-activate:active {
+  transform: scale(0.88);
 }
 
 .workspace-activate {
@@ -219,17 +265,13 @@ button {
 }
 
 #workspace {
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   position: relative;
   background: var(--terminal-background);
-}
-
-#app.sidebar-visible > #workspace {
-  grid-column: 2;
 }
 
 .pane {
@@ -452,5 +494,15 @@ button {
   .workspace-item,
   .workspace-close {
     transition: background-color 100ms ease, opacity 100ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app,
+  #workspace-sidebar,
+  #workspace-peek,
+  .workspace-peek-item,
+  .workspace-peek-activate {
+    transition: none;
   }
 }

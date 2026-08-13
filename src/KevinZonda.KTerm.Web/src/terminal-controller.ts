@@ -29,6 +29,8 @@ export class TerminalController {
   private webglAddon?: WebglAddon;
   private opened = false;
   private exited = false;
+  private fitSuspended = false;
+  private fitPending = false;
   private fitTimer?: number;
   private lastCols = 0;
   private lastRows = 0;
@@ -142,6 +144,11 @@ export class TerminalController {
   }
 
   public scheduleFit(): void {
+    if (this.fitSuspended) {
+      this.fitPending = true;
+      return;
+    }
+
     if (this.fitTimer !== undefined) {
       window.clearTimeout(this.fitTimer);
     }
@@ -149,6 +156,27 @@ export class TerminalController {
     this.fitTimer = window.setTimeout(() => {
       this.fitNow();
     }, 40);
+  }
+
+  public setFitSuspended(suspended: boolean): void {
+    if (suspended === this.fitSuspended) {
+      return;
+    }
+
+    this.fitSuspended = suspended;
+    if (suspended) {
+      if (this.fitTimer !== undefined) {
+        window.clearTimeout(this.fitTimer);
+        this.fitTimer = undefined;
+        this.fitPending = true;
+      }
+      return;
+    }
+
+    if (this.fitPending) {
+      this.fitPending = false;
+      this.scheduleFit();
+    }
   }
 
   public copySelection(): boolean {
@@ -197,6 +225,11 @@ export class TerminalController {
   }
 
   private fitNow(): boolean {
+    if (this.fitSuspended) {
+      this.fitPending = true;
+      return false;
+    }
+
     if (this.fitTimer !== undefined) {
       window.clearTimeout(this.fitTimer);
       this.fitTimer = undefined;

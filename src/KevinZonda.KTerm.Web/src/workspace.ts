@@ -45,6 +45,8 @@ export class Workspace implements TerminalCallbacks {
   private readonly bridge: NativeBridge;
   private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
+  private readonly peekRail: HTMLElement;
+  private readonly peekList: HTMLElement;
   private readonly sidebar: HTMLElement;
   private readonly workspaceList: HTMLElement;
   private readonly status: HTMLElement;
@@ -62,18 +64,23 @@ export class Workspace implements TerminalCallbacks {
   private fontSaveTimer?: number;
   private peekOpenTimer?: number;
   private peekCloseTimer?: number;
+  private sidebarLayoutTimer?: number;
+  private sidebarLayoutAnimating = false;
 
   public constructor(bridge: NativeBridge) {
     this.bridge = bridge;
     this.app = this.requireElement('app');
     this.workspace = this.requireElement('workspace');
+    this.peekRail = this.requireElement('workspace-peek');
+    this.peekList = this.requireElement('workspace-peek-list');
     this.sidebar = this.requireElement('workspace-sidebar');
     this.workspaceList = this.requireElement('workspace-list');
     this.status = this.requireElement('status');
     this.requireElement('new-workspace').addEventListener('click', () => void this.createWorkspace());
-    this.sidebar.addEventListener('pointerenter', () => this.cancelPeekClose());
-    this.sidebar.addEventListener('pointerleave', () => this.schedulePeekClose());
-    this.sidebar.addEventListener('click', this.handleSidebarBackgroundClick);
+    this.peekRail.addEventListener('pointerenter', () => this.cancelPeekClose());
+    this.peekRail.addEventListener('pointerleave', () => this.schedulePeekClose());
+    this.peekRail.addEventListener('click', this.handlePeekBackgroundClick);
+    this.app.addEventListener('transitionend', this.handleAppTransitionEnd);
 
     this.bridge.on('session.output', event => this.handleOutput(event));
     this.bridge.on('session.exited', event => this.handleExit(event));
@@ -356,66 +363,83 @@ export class Workspace implements TerminalCallbacks {
     }
 
     const layoutChanged = mode === 'expanded' || this.sidebarMode === 'expanded';
+    if (layoutChanged) {
+      this.beginSidebarLayoutAnimation();
+    }
     this.cancelPeekOpen();
     this.cancelPeekClose();
     this.sidebarMode = mode;
     this.app.classList.toggle('sidebar-peek', mode === 'peek');
     this.app.classList.toggle('sidebar-visible', mode === 'expanded');
-    this.sidebar.setAttribute('aria-hidden', String(mode === 'hidden'));
-    this.renderSidebar();
-    if (layoutChanged) {
-      window.requestAnimationFrame(() => this.fitVisibleTerminals());
+    this.peekRail.setAttribute('aria-hidden', String(mode !== 'peek'));
+    this.sidebar.setAttribute('aria-hidden', String(mode !== 'expanded'));
+    if (mode !== 'expanded' && this.editingWorkspaceId) {
+      this.editingWorkspaceId = undefined;
+      this.renderSidebar();
     }
   }
 
   private renderSidebar(): void {
-    const fragment = document.createDocumentFragment();
+    const sidebarFragment = document.createDocumentFragment();
+    const peekFragment = document.createDocumentFragment();
     for (const workspace of this.workspaces) {
       const item = document.createElement('div');
       item.className = 'workspace-item';
       item.dataset.workspaceId = workspace.id;
       item.classList.toggle('active', workspace.id === this.activeWorkspaceId);
 
-      if (this.sidebarMode === 'expanded' && workspace.id === this.editingWorkspaceId) {
+      if (workspace.id === this.editingWorkspaceId) {
         item.append(this.createWorkspaceNameEditor(workspace));
       } else {
         const activate = document.createElement('button');
         activate.type = 'button';
         activate.className = 'workspace-activate';
-        activate.textContent = this.sidebarMode === 'peek' ? '' : workspace.name;
+        activate.textContent = workspace.name;
         activate.title = workspace.name;
         activate.setAttribute('aria-label', workspace.name);
         activate.addEventListener('click', () => this.activateWorkspace(workspace.id));
-        if (this.sidebarMode === 'expanded') {
-          activate.addEventListener('dblclick', event => {
-            event.preventDefault();
-            this.startWorkspaceRename(workspace.id);
-          });
-        }
+        activate.addEventListener('dblclick', event => {
+          event.preventDefault();
+          this.startWorkspaceRename(workspace.id);
+        });
         item.append(activate);
       }
 
-      if (this.sidebarMode === 'expanded') {
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'workspace-close';
-        close.textContent = '×';
-        close.title = `Close ${workspace.name}`;
-        close.setAttribute('aria-label', `Close ${workspace.name}`);
-        close.addEventListener('click', event => {
-          event.stopPropagation();
-          this.closeWorkspace(workspace.id);
-        });
-        item.append(close);
-      }
-      fragment.append(item);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'workspace-close';
+      close.textContent = '×';
+      close.title = `Close ${workspace.name}`;
+      close.setAttribute('aria-label', `Close ${workspace.name}`);
+      close.addEventListener('click', event => {
+        event.stopPropagation();
+        this.closeWorkspace(workspace.id);
+      });
+      item.append(close);
+      sidebarFragment.append(item);
+
+      const peekItem = document.createElement('div');
+      peekItem.className = 'workspace-peek-item';
+      peekItem.dataset.workspaceId = workspace.id;
+      peekItem.classList.toggle('active', workspace.id === this.activeWorkspaceId);
+      const peekActivate = document.createElement('button');
+      peekActivate.type = 'button';
+      peekActivate.className = 'workspace-peek-activate';
+      peekActivate.title = workspace.name;
+      peekActivate.setAttribute('aria-label', workspace.name);
+      peekActivate.addEventListener('click', () => this.activateWorkspace(workspace.id));
+      peekItem.append(peekActivate);
+      peekFragment.append(peekItem);
     }
-    this.workspaceList.replaceChildren(fragment);
+    this.workspaceList.replaceChildren(sidebarFragment);
+    this.peekList.replaceChildren(peekFragment);
   }
 
   private updateSidebarSelection(): void {
-    this.workspaceList.querySelectorAll<HTMLElement>('.workspace-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.workspaceId === this.activeWorkspaceId);
+    [this.workspaceList, this.peekList].forEach(list => {
+      list.querySelectorAll<HTMLElement>('.workspace-item, .workspace-peek-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.workspaceId === this.activeWorkspaceId);
+      });
     });
   }
 
@@ -499,10 +523,16 @@ export class Workspace implements TerminalCallbacks {
     }
   };
 
-  private readonly handleSidebarBackgroundClick = (event: MouseEvent): void => {
+  private readonly handlePeekBackgroundClick = (event: MouseEvent): void => {
     if (this.sidebarMode === 'peek' &&
-        (event.target === this.sidebar || event.target === this.workspaceList)) {
+        (event.target === this.peekRail || event.target === this.peekList)) {
       this.setSidebarMode('expanded');
+    }
+  };
+
+  private readonly handleAppTransitionEnd = (event: TransitionEvent): void => {
+    if (event.target === this.app && event.propertyName === 'grid-template-columns') {
+      this.finishSidebarLayoutAnimation();
     }
   };
 
@@ -538,6 +568,37 @@ export class Workspace implements TerminalCallbacks {
       window.clearTimeout(this.peekCloseTimer);
       this.peekCloseTimer = undefined;
     }
+  }
+
+  private beginSidebarLayoutAnimation(): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      window.requestAnimationFrame(() => this.fitVisibleTerminals());
+      return;
+    }
+
+    this.sidebarLayoutAnimating = true;
+    this.terminals.forEach(terminal => terminal.setFitSuspended(true));
+    if (this.sidebarLayoutTimer !== undefined) {
+      window.clearTimeout(this.sidebarLayoutTimer);
+    }
+    this.sidebarLayoutTimer = window.setTimeout(
+      () => this.finishSidebarLayoutAnimation(),
+      300
+    );
+  }
+
+  private finishSidebarLayoutAnimation(): void {
+    if (!this.sidebarLayoutAnimating) {
+      return;
+    }
+
+    this.sidebarLayoutAnimating = false;
+    if (this.sidebarLayoutTimer !== undefined) {
+      window.clearTimeout(this.sidebarLayoutTimer);
+      this.sidebarLayoutTimer = undefined;
+    }
+    this.terminals.forEach(terminal => terminal.setFitSuspended(false));
+    this.fitVisibleTerminals();
   }
 
   private async createTabInPane(paneId?: string): Promise<void> {
@@ -581,6 +642,9 @@ export class Workspace implements TerminalCallbacks {
     );
     this.closedSessionIds.delete(session.sessionId);
     this.terminals.set(session.sessionId, terminal);
+    if (this.sidebarLayoutAnimating) {
+      terminal.setFitSuspended(true);
+    }
 
     const pending = this.earlyOutput.get(session.sessionId);
     if (pending) {
