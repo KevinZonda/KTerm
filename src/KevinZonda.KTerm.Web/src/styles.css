@@ -180,7 +180,6 @@ button {
 .workspace-item.active {
   color: var(--chrome-text-bright, #eef2f6);
   background: var(--chrome-active, #29313d);
-  box-shadow: inset 2px 0 var(--chrome-accent, #5e81ac);
 }
 
 .workspace-peek-item {
