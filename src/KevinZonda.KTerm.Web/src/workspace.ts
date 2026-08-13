@@ -64,8 +64,6 @@ export class Workspace implements TerminalCallbacks {
   private fontSaveTimer?: number;
   private peekOpenTimer?: number;
   private peekCloseTimer?: number;
-  private sidebarLayoutTimer?: number;
-  private sidebarLayoutAnimating = false;
 
   public constructor(bridge: NativeBridge) {
     this.bridge = bridge;
@@ -80,7 +78,6 @@ export class Workspace implements TerminalCallbacks {
     this.peekRail.addEventListener('pointerenter', () => this.cancelPeekClose());
     this.peekRail.addEventListener('pointerleave', () => this.schedulePeekClose());
     this.peekRail.addEventListener('click', this.handlePeekBackgroundClick);
-    this.app.addEventListener('transitionend', this.handleAppTransitionEnd);
 
     this.bridge.on('session.output', event => this.handleOutput(event));
     this.bridge.on('session.exited', event => this.handleExit(event));
@@ -363,9 +360,6 @@ export class Workspace implements TerminalCallbacks {
     }
 
     const layoutChanged = mode === 'expanded' || this.sidebarMode === 'expanded';
-    if (layoutChanged) {
-      this.beginSidebarLayoutAnimation();
-    }
     this.cancelPeekOpen();
     this.cancelPeekClose();
     this.sidebarMode = mode;
@@ -376,6 +370,9 @@ export class Workspace implements TerminalCallbacks {
     if (mode !== 'expanded' && this.editingWorkspaceId) {
       this.editingWorkspaceId = undefined;
       this.renderSidebar();
+    }
+    if (layoutChanged) {
+      this.fitVisibleTerminals(true);
     }
   }
 
@@ -530,12 +527,6 @@ export class Workspace implements TerminalCallbacks {
     }
   };
 
-  private readonly handleAppTransitionEnd = (event: TransitionEvent): void => {
-    if (event.target === this.app && event.propertyName === 'grid-template-columns') {
-      this.finishSidebarLayoutAnimation();
-    }
-  };
-
   private readonly handleWindowBlur = (): void => {
     this.cancelPeekOpen();
     if (this.sidebarMode === 'peek') {
@@ -568,37 +559,6 @@ export class Workspace implements TerminalCallbacks {
       window.clearTimeout(this.peekCloseTimer);
       this.peekCloseTimer = undefined;
     }
-  }
-
-  private beginSidebarLayoutAnimation(): void {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      window.requestAnimationFrame(() => this.fitVisibleTerminals());
-      return;
-    }
-
-    this.sidebarLayoutAnimating = true;
-    this.terminals.forEach(terminal => terminal.setFitSuspended(true));
-    if (this.sidebarLayoutTimer !== undefined) {
-      window.clearTimeout(this.sidebarLayoutTimer);
-    }
-    this.sidebarLayoutTimer = window.setTimeout(
-      () => this.finishSidebarLayoutAnimation(),
-      300
-    );
-  }
-
-  private finishSidebarLayoutAnimation(): void {
-    if (!this.sidebarLayoutAnimating) {
-      return;
-    }
-
-    this.sidebarLayoutAnimating = false;
-    if (this.sidebarLayoutTimer !== undefined) {
-      window.clearTimeout(this.sidebarLayoutTimer);
-      this.sidebarLayoutTimer = undefined;
-    }
-    this.terminals.forEach(terminal => terminal.setFitSuspended(false));
-    this.fitVisibleTerminals();
   }
 
   private async createTabInPane(paneId?: string): Promise<void> {
@@ -642,9 +602,6 @@ export class Workspace implements TerminalCallbacks {
     );
     this.closedSessionIds.delete(session.sessionId);
     this.terminals.set(session.sessionId, terminal);
-    if (this.sidebarLayoutAnimating) {
-      terminal.setFitSuspended(true);
-    }
 
     const pending = this.earlyOutput.get(session.sessionId);
     if (pending) {
@@ -925,9 +882,14 @@ export class Workspace implements TerminalCallbacks {
     });
   }
 
-  private fitVisibleTerminals(): void {
+  private fitVisibleTerminals(immediate = false): void {
     this.activeWorkspace?.panes.forEach(pane => {
-      this.terminals.get(pane.activeSessionId)?.scheduleFit();
+      const terminal = this.terminals.get(pane.activeSessionId);
+      if (immediate) {
+        terminal?.fitImmediately();
+      } else {
+        terminal?.scheduleFit();
+      }
     });
   }
 
