@@ -15,6 +15,9 @@ export interface TerminalCallbacks {
 export class TerminalController {
   private static readonly MIN_FONT_SIZE = 8;
   private static readonly MAX_FONT_SIZE = 72;
+  // Chromium reports pixel wheel deltas; 40px per line matches the normal
+  // buffer scroll feel (a typical 120px notch scrolls 3 lines).
+  private static readonly ALT_SCROLL_PIXELS_PER_LINE = 40;
 
   public readonly sessionId: string;
   public readonly element: HTMLDivElement;
@@ -34,6 +37,7 @@ export class TerminalController {
   private fitTimer?: number;
   private lastCols = 0;
   private lastRows = 0;
+  private altScrollRemainder = 0;
 
   public constructor(
     session: SessionCreated,
@@ -135,6 +139,14 @@ export class TerminalController {
 
   public setFocused(focused: boolean): void {
     this.element.classList.toggle('focused', focused);
+  }
+
+  public get cols(): number {
+    return this.terminal.cols;
+  }
+
+  public get rows(): number {
+    return this.terminal.rows;
   }
 
   public applyFontSettings(font: FontSettings): void {
@@ -250,10 +262,60 @@ export class TerminalController {
   };
 
   private readonly handleWheel = (event: WheelEvent): void => {
-    if (!event.ctrlKey || event.deltaY === 0) {
+    if (event.deltaY === 0) {
       return;
     }
 
+    if (event.ctrlKey) {
+      this.zoomFont(event);
+      return;
+    }
+
+    // The alternate buffer has no scrollback and xterm.js does not translate
+    // the wheel into input, so without mouse reporting the wheel would be a
+    // no-op. Send arrow keys like Windows Terminal does, letting fullscreen
+    // apps such as codex scroll their own transcript.
+    if (this.terminal.modes.mouseTrackingMode !== 'none' ||
+        this.terminal.buffer.active.type !== 'alternate') {
+      return;
+    }
+
+    const lines = this.consumeAltScrollDelta(event);
+    if (lines === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const applicationMode = this.terminal.modes.applicationCursorKeysMode;
+    const sequence = lines < 0
+      ? (applicationMode ? '\x1bOA' : '\x1b[A')
+      : (applicationMode ? '\x1bOB' : '\x1b[B');
+    this.bridge.sendInput(this.sessionId, sequence.repeat(Math.abs(lines)));
+  };
+
+  private consumeAltScrollDelta(event: WheelEvent): number {
+    let delta: number;
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      delta = event.deltaY;
+    } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      delta = event.deltaY * this.terminal.rows;
+    } else {
+      delta = event.deltaY / TerminalController.ALT_SCROLL_PIXELS_PER_LINE;
+    }
+
+    if (Math.sign(delta) !== Math.sign(this.altScrollRemainder)) {
+      this.altScrollRemainder = 0;
+    }
+    this.altScrollRemainder += delta;
+
+    const lines = Math.trunc(this.altScrollRemainder);
+    this.altScrollRemainder -= lines;
+    return lines;
+  }
+
+  private zoomFont(event: WheelEvent): void {
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -273,6 +335,6 @@ export class TerminalController {
     this.scheduleFit();
     this.focus();
     this.callbacks.onFontSizeChanged(this.sessionId, nextSize);
-  };
+  }
 
 }

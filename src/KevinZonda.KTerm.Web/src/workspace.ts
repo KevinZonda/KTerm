@@ -124,10 +124,15 @@ export class Workspace implements TerminalCallbacks {
     await this.runExclusive(async () => {
       this.setStatus('Starting split shell…');
       const current = this.terminals.get(pane.activeSessionId);
-      const session = await this.bridge.createSession(
-        current?.element.clientWidth ? 40 : 80,
-        24
-      );
+      // Estimate the new pane's size from the focused terminal so the ConPTY
+      // starts close to its final dimensions and fullscreen apps do not redraw twice.
+      let cols = 80;
+      let rows = 24;
+      if (current && current.cols > 0 && current.rows > 0) {
+        cols = direction === 'columns' ? Math.max(2, Math.floor(current.cols / 2)) : current.cols;
+        rows = direction === 'rows' ? Math.max(2, Math.floor(current.rows / 2)) : current.rows;
+      }
+      const session = await this.bridge.createSession(cols, rows);
       this.addTerminal(session);
 
       const newPane: PaneState = {
@@ -570,7 +575,12 @@ export class Workspace implements TerminalCallbacks {
 
   private async createTabInPane(paneId?: string): Promise<void> {
     this.setStatus('Starting shell…');
-    const session = await this.bridge.createSession();
+    // A new tab fills the pane, so start the ConPTY at the current terminal's size.
+    const anchor = paneId ? this.panes.get(paneId) : this.focusedPane;
+    const current = anchor ? this.terminals.get(anchor.activeSessionId) : undefined;
+    const session = current && current.cols > 0 && current.rows > 0
+      ? await this.bridge.createSession(current.cols, current.rows)
+      : await this.bridge.createSession();
     this.addTerminal(session);
 
     let pane = paneId ? this.panes.get(paneId) : this.focusedPane;
