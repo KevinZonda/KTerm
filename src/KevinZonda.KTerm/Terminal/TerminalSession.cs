@@ -270,12 +270,22 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         TerminalProtocolTrace.Observe(Id, "renderer->process", data);
         var bytes = Encoding.UTF8.GetBytes(data);
+        await WriteAsync(bytes).ConfigureAwait(false);
+        TerminalProtocolTrace.Observe(Id, "renderer->pipe", data);
+    }
+
+    internal async Task WriteAsync(ReadOnlyMemory<byte> data)
+    {
+        if (Volatile.Read(ref _disposed) != 0 || data.IsEmpty)
+        {
+            return;
+        }
+
         await _inputLock.WaitAsync(_lifetime.Token).ConfigureAwait(false);
         try
         {
-            await _input.WriteAsync(bytes, _lifetime.Token).ConfigureAwait(false);
+            await _input.WriteAsync(data, _lifetime.Token).ConfigureAwait(false);
             await _input.FlushAsync(_lifetime.Token).ConfigureAwait(false);
-            TerminalProtocolTrace.Observe(Id, "renderer->pipe", data);
         }
         catch (Exception) when (_lifetime.IsCancellationRequested)
         {

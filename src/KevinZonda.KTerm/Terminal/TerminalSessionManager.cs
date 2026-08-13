@@ -149,6 +149,9 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
     internal Task WriteAsync(string sessionId, string data) =>
         Get(sessionId).WriteAsync(data);
 
+    internal Task WriteAsync(string sessionId, ReadOnlyMemory<byte> data) =>
+        Get(sessionId).WriteAsync(data);
+
     internal void Resize(string sessionId, int columns, int rows) =>
         Get(sessionId).Resize(columns, rows);
 

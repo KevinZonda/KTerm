@@ -77,6 +77,10 @@ export class NativeBridge {
     this.send('session.input', { data }, sessionId);
   }
 
+  public sendBinaryInput(sessionId: string, data: string): void {
+    this.send('session.binaryInput', { data: btoa(data) }, sessionId);
+  }
+
   public resize(sessionId: string, cols: number, rows: number): void {
     this.send('session.resize', { cols, rows }, sessionId);
   }

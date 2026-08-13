@@ -95,6 +95,12 @@ internal sealed class WebViewBridge : IDisposable
                         GetString(message.Payload, "data"));
                     break;
 
+                case "session.binaryInput":
+                    await _sessions.WriteAsync(
+                        RequireSessionId(message),
+                        Convert.FromBase64String(GetString(message.Payload, "data")));
+                    break;
+
                 case "session.resize":
                     _sessions.Resize(
                         RequireSessionId(message),

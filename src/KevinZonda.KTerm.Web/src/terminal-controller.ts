@@ -69,6 +69,7 @@ export class TerminalController {
 
     this.disposables.push(
       this.terminal.onData(data => this.bridge.sendInput(this.sessionId, data)),
+      this.terminal.onBinary(data => this.bridge.sendBinaryInput(this.sessionId, data)),
       this.terminal.onTitleChange(title => this.callbacks.onTitle(this.sessionId, title)),
       this.terminal.onResize(size => {
         if (size.cols === this.lastCols && size.rows === this.lastRows) {
