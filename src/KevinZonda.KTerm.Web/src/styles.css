@@ -68,7 +68,8 @@ button {
 
 #new-workspace,
 .workspace-activate,
-.workspace-close {
+.workspace-close,
+.workspace-name-editor {
   border: 0;
   color: inherit;
   background: transparent;
@@ -127,6 +128,24 @@ button {
   text-align: left;
   text-overflow: ellipsis;
   font-size: 12px;
+}
+
+.workspace-name-editor {
+  min-width: 0;
+  height: 26px;
+  margin: 4px 2px 4px 5px;
+  padding: 0 5px;
+  border: 1px solid #5e81ac;
+  border-radius: 3px;
+  outline: none;
+  color: #eef2f6;
+  background: #0c0f14;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.workspace-name-editor:focus {
+  box-shadow: 0 0 0 1px #5e81ac;
 }
 
 .workspace-close {

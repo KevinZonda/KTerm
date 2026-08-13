@@ -36,6 +36,8 @@ interface WorkspaceState {
 }
 
 export class Workspace implements TerminalCallbacks {
+  private static readonly MAX_WORKSPACE_NAME_LENGTH = 64;
+
   private readonly bridge: NativeBridge;
   private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
@@ -48,6 +50,7 @@ export class Workspace implements TerminalCallbacks {
   private readonly workspaces: WorkspaceState[] = [];
   private readonly paneElements = new Map<string, HTMLElement>();
   private activeWorkspaceId?: string;
+  private editingWorkspaceId?: string;
   private nextWorkspaceNumber = 1;
   private sidebarVisible = false;
   private settings: AppSettings = structuredClone(DEFAULT_SETTINGS);
@@ -175,6 +178,18 @@ export class Workspace implements TerminalCallbacks {
       return;
     }
 
+    if (event.target instanceof HTMLInputElement) {
+      return;
+    }
+
+    if (event.code === 'F2' && !event.altKey && !event.ctrlKey &&
+        !event.shiftKey && !event.metaKey && this.sidebarVisible && this.activeWorkspaceId) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.startWorkspaceRename(this.activeWorkspaceId);
+      return;
+    }
+
     if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey) {
       let handled = true;
       switch (event.code) {
@@ -273,7 +288,7 @@ export class Workspace implements TerminalCallbacks {
     }
 
     this.activeWorkspaceId = workspaceId;
-    this.renderSidebar();
+    this.updateSidebarSelection();
     this.render();
     const focused = this.focusedPane;
     if (focused) {
@@ -289,6 +304,9 @@ export class Workspace implements TerminalCallbacks {
       }
 
       const workspace = this.workspaces[index]!;
+      if (this.editingWorkspaceId === workspace.id) {
+        this.editingWorkspaceId = undefined;
+      }
       const wasActive = workspace.id === this.activeWorkspaceId;
       for (const pane of workspace.panes.values()) {
         for (const tab of pane.tabs) {
@@ -332,14 +350,24 @@ export class Workspace implements TerminalCallbacks {
     for (const workspace of this.workspaces) {
       const item = document.createElement('div');
       item.className = 'workspace-item';
+      item.dataset.workspaceId = workspace.id;
       item.classList.toggle('active', workspace.id === this.activeWorkspaceId);
 
-      const activate = document.createElement('button');
-      activate.type = 'button';
-      activate.className = 'workspace-activate';
-      activate.textContent = workspace.name;
-      activate.title = workspace.name;
-      activate.addEventListener('click', () => this.activateWorkspace(workspace.id));
+      if (workspace.id === this.editingWorkspaceId) {
+        item.append(this.createWorkspaceNameEditor(workspace));
+      } else {
+        const activate = document.createElement('button');
+        activate.type = 'button';
+        activate.className = 'workspace-activate';
+        activate.textContent = workspace.name;
+        activate.title = workspace.name;
+        activate.addEventListener('click', () => this.activateWorkspace(workspace.id));
+        activate.addEventListener('dblclick', event => {
+          event.preventDefault();
+          this.startWorkspaceRename(workspace.id);
+        });
+        item.append(activate);
+      }
 
       const close = document.createElement('button');
       close.type = 'button';
@@ -352,10 +380,75 @@ export class Workspace implements TerminalCallbacks {
         this.closeWorkspace(workspace.id);
       });
 
-      item.append(activate, close);
+      item.append(close);
       fragment.append(item);
     }
     this.workspaceList.replaceChildren(fragment);
+  }
+
+  private updateSidebarSelection(): void {
+    this.workspaceList.querySelectorAll<HTMLElement>('.workspace-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.workspaceId === this.activeWorkspaceId);
+    });
+  }
+
+  private startWorkspaceRename(workspaceId: string): void {
+    if (!this.workspaces.some(workspace => workspace.id === workspaceId)) {
+      return;
+    }
+
+    this.editingWorkspaceId = workspaceId;
+    this.renderSidebar();
+    window.requestAnimationFrame(() => {
+      const editor = this.workspaceList.querySelector<HTMLInputElement>(
+        `.workspace-name-editor[data-workspace-id="${workspaceId}"]`
+      );
+      editor?.focus();
+      editor?.select();
+    });
+  }
+
+  private createWorkspaceNameEditor(workspace: WorkspaceState): HTMLInputElement {
+    const editor = document.createElement('input');
+    editor.type = 'text';
+    editor.className = 'workspace-name-editor';
+    editor.dataset.workspaceId = workspace.id;
+    editor.value = workspace.name;
+    editor.maxLength = Workspace.MAX_WORKSPACE_NAME_LENGTH;
+    editor.setAttribute('aria-label', `Rename ${workspace.name}`);
+
+    let finished = false;
+    const finish = (save: boolean): void => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+
+      if (save) {
+        const name = editor.value.trim();
+        if (name) {
+          workspace.name = name;
+        }
+      }
+
+      if (this.editingWorkspaceId === workspace.id) {
+        this.editingWorkspaceId = undefined;
+      }
+      this.renderSidebar();
+    };
+
+    editor.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(false);
+      }
+    });
+    editor.addEventListener('blur', () => window.setTimeout(() => finish(true), 0));
+    return editor;
   }
 
   private async createTabInPane(paneId?: string): Promise<void> {
