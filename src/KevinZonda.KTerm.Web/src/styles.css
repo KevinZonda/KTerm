@@ -100,6 +100,16 @@ button {
     visibility 0s;
 }
 
+/* Expanded sidebar wins over the peek rail: hide the rail immediately,
+   without a fade-out, so the two never overlap during mode switches. */
+#app.sidebar-visible > #workspace-peek {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-10px);
+  pointer-events: none;
+  transition: none;
+}
+
 .workspace-sidebar-header {
   display: flex;
   align-items: center;
