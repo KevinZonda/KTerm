@@ -1,6 +1,6 @@
 # KevinZonda.KTerm
 
-KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。原生宿主使用 .NET 10 WinForms 和 WebView2；终端前端使用 xterm.js/WebGL；每个 Pane 都连接独立的 Windows ConPTY 和 Shell 进程。
+KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。原生宿主使用 .NET 10 WinForms 和 WebView2；终端前端使用 xterm.js/WebGL；每个 Pane 都连接独立的 ConPTY 和 Shell 进程。终端会话优先使用随应用分发的 passthrough ConPTY（`OpenConsole.exe`，来自 Windows Terminal，MIT），让 DECSTBM 等 VT 序列原样到达前端；该文件缺失时自动回退到系统 inbox conhost。
 
 ## 当前功能
 
@@ -10,6 +10,9 @@ KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。�
 - WebGL 渲染失败时自动回退。
 - 拖动分隔线和窗口 resize 会同步更新 ConPTY 行列数。
 - 支持终端选择、`Ctrl+Shift+C` 复制与 `Ctrl+Shift+V` 粘贴。
+- codex 等 inline TUI 的历史通过 DECSTBM region scroll 进入终端 scrollback，滚轮可直接查看（依赖 passthrough ConPTY）。
+- vim、less 等 alternate screen 应用中，滚轮自动转为方向键（alternate scroll）。
+- 新 Tab / 分屏按当前 Pane 尺寸创建 ConPTY，减少全屏 TUI 的二次重绘。
 - 关闭 Pane、Tab 或应用时回收相应 Shell、ConPTY 和 Win32 handle。
 
 ## 快捷键
@@ -32,6 +35,7 @@ KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。�
 - .NET 10 SDK
 - Node.js 与 pnpm
 - Microsoft Edge WebView2 Evergreen Runtime
+- （可选）`tools/openconsole/OpenConsole.exe`：passthrough ConPTY 主机，缺失时自动回退系统 conhost
 
 ```powershell
 dotnet build KevinZonda.KTerm.slnx

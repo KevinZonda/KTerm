@@ -5,7 +5,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace KevinZonda.KTerm.Interop;
 
-internal static class NativeMethods
+internal static partial class NativeMethods
 {
     internal const int DwmUseImmersiveDarkMode = 20;
     internal const int DwmWindowCornerPreference = 33;

@@ -12,7 +12,7 @@ internal sealed class TerminalSession : IAsyncDisposable
     private const int BufferSize = 16 * 1024;
     private readonly FileStream _input;
     private readonly FileStream _output;
-    private readonly SafePseudoConsoleHandle _pseudoConsole;
+    private readonly IConHost _conHost;
     private readonly SafeKernelHandle _process;
     private readonly TerminalThemePreset _theme;
     private readonly CancellationTokenSource _lifetime = new();
@@ -32,7 +32,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         uint processId,
         FileStream input,
         FileStream output,
-        SafePseudoConsoleHandle pseudoConsole,
+        IConHost conHost,
         SafeKernelHandle process,
         TerminalThemePreset theme,
         int columns,
@@ -43,7 +43,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         ProcessId = processId;
         _input = input;
         _output = output;
-        _pseudoConsole = pseudoConsole;
+        _conHost = conHost;
         _process = process;
         _theme = theme;
         _columns = columns;
@@ -95,7 +95,7 @@ internal sealed class TerminalSession : IAsyncDisposable
             throw NativeMethods.LastError("Unable to create the ConPTY output pipe.");
         }
 
-        SafePseudoConsoleHandle? pseudoConsole = null;
+        IConHost? conHost = null;
         SafeKernelHandle? process = null;
         FileStream? inputStream = null;
         FileStream? outputStream = null;
@@ -104,14 +104,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         try
         {
-            var result = NativeMethods.CreatePseudoConsole(
-                new NativeMethods.Coord(columns, rows),
-                pseudoInput.DangerousGetHandle(),
-                pseudoOutput.DangerousGetHandle(),
-                0,
-                out var pseudoConsoleValue);
-            Marshal.ThrowExceptionForHR(result);
-            pseudoConsole = new SafePseudoConsoleHandle(pseudoConsoleValue);
+            conHost = ConHost.Create(columns, rows, pseudoInput, pseudoOutput);
 
             pseudoInput.Dispose();
             pseudoOutput.Dispose();
@@ -133,7 +126,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                     attributeList,
                     0,
                     NativeMethods.ProcThreadAttributePseudoConsole,
-                    pseudoConsole.DangerousGetHandle(),
+                    conHost.PseudoConsoleHandle,
                     (nuint)IntPtr.Size,
                     IntPtr.Zero,
                     IntPtr.Zero))
@@ -185,7 +178,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                 processInformation.dwProcessId,
                 inputStream,
                 outputStream,
-                pseudoConsole,
+                conHost,
                 process,
                 theme,
                 columns,
@@ -196,7 +189,7 @@ internal sealed class TerminalSession : IAsyncDisposable
             inputStream?.Dispose();
             outputStream?.Dispose();
             process?.Dispose();
-            pseudoConsole?.Dispose();
+            conHost?.Dispose();
             hostInput.Dispose();
             hostOutput.Dispose();
             pseudoInput.Dispose();
@@ -313,10 +306,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                 return;
             }
 
-            var result = NativeMethods.ResizePseudoConsole(
-                _pseudoConsole.DangerousGetHandle(),
-                new NativeMethods.Coord(columns, rows));
-            Marshal.ThrowExceptionForHR(result);
+            _conHost.Resize(columns, rows);
             _columns = columns;
             _rows = rows;
         }
@@ -396,7 +386,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         await Task.Run(() =>
         {
-            _pseudoConsole.Dispose();
+            _conHost.Dispose();
 
             var waitResult = NativeMethods.WaitForSingleObject(_process.DangerousGetHandle(), 750);
             if (waitResult == NativeMethods.WaitTimeout)

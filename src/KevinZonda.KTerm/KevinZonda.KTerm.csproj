@@ -23,6 +23,16 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4181-prerelease" />
   </ItemGroup>
 
+  <!-- Passthrough ConPTY host (from Windows Terminal, MIT). When present, sessions
+       prefer it over the inbox conhost so VT sequences reach the terminal verbatim. -->
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe')">
+    <None Include="$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe">
+      <Link>OpenConsole.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
   <Target Name="BuildWebAssets" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
     <Exec WorkingDirectory="$(WebProjectDir)" Command="pnpm install --frozen-lockfile" Condition="!Exists('$(WebProjectDir)\node_modules\.pnpm\lock.yaml')" />
     <Exec WorkingDirectory="$(WebProjectDir)" Command="pnpm run build" />
