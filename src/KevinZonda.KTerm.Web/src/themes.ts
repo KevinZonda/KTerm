@@ -69,8 +69,4 @@ export function applyTerminalThemeToDocument(name: string): void {
     '--terminal-background',
     theme.background ?? '#0c0f14'
   );
-  document.documentElement.style.setProperty(
-    '--terminal-foreground',
-    theme.foreground ?? '#d8dee9'
-  );
 }

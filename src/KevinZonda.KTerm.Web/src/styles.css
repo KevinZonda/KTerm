@@ -1,6 +1,5 @@
 :root {
   --terminal-background: #0c0f14;
-  --terminal-foreground: #d8dee9;
   color: #d8dee9;
   background: #0c0f14;
   font-family: Inter, "Segoe UI", sans-serif;
@@ -117,8 +116,7 @@ button {
 
 #new-workspace,
 .workspace-activate,
-.workspace-close,
-.workspace-name-editor {
+.workspace-close {
   border: 0;
   color: inherit;
   background: transparent;
@@ -217,7 +215,6 @@ button {
   padding: 0;
   border: 0;
   border-radius: 4px;
-  color: inherit;
   background: transparent;
   transition: transform 100ms ease-out;
 }
@@ -432,10 +429,6 @@ button {
   min-height: 0;
   padding: 5px 4px 3px 7px;
   overflow: hidden;
-  background: var(--terminal-background);
-}
-
-.terminal-pane.exited {
   background: var(--terminal-background);
 }
 
