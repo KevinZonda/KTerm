@@ -10,17 +10,17 @@ namespace KevinZonda.KTerm.Terminal;
 internal sealed class TerminalSession : IAsyncDisposable
 {
     private const int BufferSize = 16 * 1024;
-    private static readonly object ConsoleAttachmentLock = new();
-
     private readonly FileStream _input;
     private readonly FileStream _output;
     private readonly SafePseudoConsoleHandle _pseudoConsole;
     private readonly SafeKernelHandle _process;
+    private readonly TerminalThemePreset _theme;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SemaphoreSlim _inputLock = new(1, 1);
     private readonly object _resizeLock = new();
     private Task? _readTask;
     private Task? _waitTask;
+    private Task? _paletteTask;
     private int _columns;
     private int _rows;
     private int _disposed;
@@ -34,6 +34,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         FileStream output,
         SafePseudoConsoleHandle pseudoConsole,
         SafeKernelHandle process,
+        TerminalThemePreset theme,
         int columns,
         int rows)
     {
@@ -44,6 +45,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         _output = output;
         _pseudoConsole = pseudoConsole;
         _process = process;
+        _theme = theme;
         _columns = columns;
         _rows = rows;
     }
@@ -67,6 +69,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         _readTask = Task.Run(ReadLoop);
         _waitTask = Task.Run(WaitForExit);
+        _paletteTask = ApplyConsoleThemeAfterStartup();
     }
 
     internal static TerminalSession Start(
@@ -173,10 +176,6 @@ internal sealed class TerminalSession : IAsyncDisposable
 
             _ = NativeMethods.CloseHandle(processInformation.hThread);
             process = new SafeKernelHandle(processInformation.hProcess);
-            if (shell.UseLegacyConsolePalette)
-            {
-                ApplyConsoleTheme(processInformation.dwProcessId, theme);
-            }
             inputStream = new FileStream(hostInput, FileAccess.Write, BufferSize, isAsync: false);
             outputStream = new FileStream(hostOutput, FileAccess.Read, BufferSize, isAsync: false);
 
@@ -188,6 +187,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                 outputStream,
                 pseudoConsole,
                 process,
+                theme,
                 columns,
                 rows);
         }
@@ -218,76 +218,21 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
     }
 
-    private static void ApplyConsoleTheme(uint processId, TerminalThemePreset theme)
+    private async Task ApplyConsoleThemeAfterStartup()
     {
-        lock (ConsoleAttachmentLock)
+        try
         {
-            _ = NativeMethods.FreeConsole();
-
-            var attached = false;
-            for (var attempt = 0; attempt < 10 && !attached; attempt++)
+            if (Volatile.Read(ref _disposed) == 0)
             {
-                attached = NativeMethods.AttachConsole(processId);
-                if (!attached)
-                {
-                    Thread.Sleep(5);
-                }
-            }
-
-            if (!attached)
-            {
-                return;
-            }
-
-            try
-            {
-                using var output = NativeMethods.CreateFileW(
-                    "CONOUT$",
-                    NativeMethods.GenericRead | NativeMethods.GenericWrite,
-                    NativeMethods.FileShareRead | NativeMethods.FileShareWrite,
-                    IntPtr.Zero,
-                    NativeMethods.OpenExisting,
-                    0,
-                    IntPtr.Zero);
-                if (output.IsInvalid)
-                {
-                    return;
-                }
-
-                var info = new NativeMethods.ConsoleScreenBufferInfoEx
-                {
-                    cbSize = (uint)Marshal.SizeOf<NativeMethods.ConsoleScreenBufferInfoEx>(),
-                    ColorTable = new uint[16]
-                };
-                if (!NativeMethods.GetConsoleScreenBufferInfoEx(output, ref info))
-                {
-                    return;
-                }
-
-                const int backgroundIndex = 0;
-                const int foregroundIndex = 7;
-                info.ColorTable[backgroundIndex] = ToColorRef(theme.Background);
-                info.ColorTable[foregroundIndex] = ToColorRef(theme.Foreground);
-                info.wAttributes = (ushort)((backgroundIndex << 4) | foregroundIndex);
-
-                // SetConsoleScreenBufferInfoEx interprets this rectangle as exclusive even
-                // though its getter returns inclusive coordinates. Compensate so applying a
-                // palette does not shrink the ConPTY viewport by one row and column.
-                info.srWindow.Right++;
-                info.srWindow.Bottom++;
-                _ = NativeMethods.SetConsoleScreenBufferInfoEx(output, ref info);
-            }
-            finally
-            {
-                _ = NativeMethods.FreeConsole();
+                await ConsoleThemeHelper.ApplyAfterStartup(
+                    ProcessId,
+                    _theme,
+                    _lifetime.Token).ConfigureAwait(false);
             }
         }
-    }
-
-    private static uint ToColorRef(string htmlColor)
-    {
-        var color = ColorTranslator.FromHtml(htmlColor);
-        return color.R | ((uint)color.G << 8) | ((uint)color.B << 16);
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
     }
 
     private static IntPtr CreateShellEnvironmentBlock(ShellLaunchSpec shell)
@@ -323,12 +268,14 @@ internal sealed class TerminalSession : IAsyncDisposable
             return;
         }
 
+        TerminalProtocolTrace.Observe(Id, "renderer->process", data);
         var bytes = Encoding.UTF8.GetBytes(data);
         await _inputLock.WaitAsync(_lifetime.Token).ConfigureAwait(false);
         try
         {
             await _input.WriteAsync(bytes, _lifetime.Token).ConfigureAwait(false);
             await _input.FlushAsync(_lifetime.Token).ConfigureAwait(false);
+            TerminalProtocolTrace.Observe(Id, "renderer->pipe", data);
         }
         catch (Exception) when (_lifetime.IsCancellationRequested)
         {
@@ -395,7 +342,9 @@ internal sealed class TerminalSession : IAsyncDisposable
 
                 if (charsUsed > 0)
                 {
-                    OutputReceived?.Invoke(this, new string(chars, 0, charsUsed));
+                    var data = new string(chars, 0, charsUsed);
+                    TerminalProtocolTrace.Observe(Id, "process->renderer", data);
+                    OutputReceived?.Invoke(this, data);
                 }
             }
         }
@@ -451,7 +400,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         try
         {
-            var pumps = new[] { _readTask, _waitTask }.OfType<Task>();
+            var pumps = new[] { _readTask, _waitTask, _paletteTask }.OfType<Task>();
             await Task.WhenAll(pumps).WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
         catch (TimeoutException)

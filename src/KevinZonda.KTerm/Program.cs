@@ -1,3 +1,5 @@
+using KevinZonda.KTerm.Terminal;
+
 namespace KevinZonda.KTerm;
 
 internal static class Program
@@ -5,6 +7,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (ConsoleThemeHelper.TryRun(args, out var helperExitCode))
+        {
+            Environment.ExitCode = helperExitCode;
+            return;
+        }
+
         ApplicationConfiguration.Initialize();
         Application.SetColorMode(SystemColorMode.Dark);
 

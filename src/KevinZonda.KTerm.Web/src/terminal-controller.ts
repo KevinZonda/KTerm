@@ -26,6 +26,8 @@ export class TerminalController {
   private readonly host = document.createElement('div');
   private readonly resizeObserver: ResizeObserver;
   private readonly disposables: IDisposable[] = [];
+  // xterm.js cannot answer OSC color queries until open() creates its theme service.
+  private readonly pendingWrites: string[] = [];
   private webglAddon?: WebglAddon;
   private opened = false;
   private exited = false;
@@ -97,6 +99,7 @@ export class TerminalController {
     if (!this.opened) {
       this.terminal.open(this.host);
       this.opened = true;
+      this.pendingWrites.splice(0).forEach(data => this.terminal.write(data));
       if (!this.fitNow()) {
         this.scheduleFit();
       }
@@ -108,6 +111,11 @@ export class TerminalController {
   }
 
   public write(data: string): void {
+    if (!this.opened) {
+      this.pendingWrites.push(data);
+      return;
+    }
+
     this.terminal.write(data);
   }
 
@@ -118,7 +126,7 @@ export class TerminalController {
 
     this.exited = true;
     this.element.classList.add('exited');
-    this.terminal.write(`\r\n\x1b[90m[process exited with code ${exitCode}]\x1b[0m\r\n`);
+    this.write(`\r\n\x1b[90m[process exited with code ${exitCode}]\x1b[0m\r\n`);
   }
 
   public focus(): void {
@@ -198,6 +206,7 @@ export class TerminalController {
     if (this.fitTimer !== undefined) {
       window.clearTimeout(this.fitTimer);
     }
+    this.pendingWrites.length = 0;
     this.host.removeEventListener('wheel', this.handleWheel, { capture: true });
     this.resizeObserver.disconnect();
     this.disposables.forEach(disposable => disposable.dispose());
