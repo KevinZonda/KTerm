@@ -133,6 +133,8 @@ internal sealed class MainForm : Form
 #endif
         core.NewWindowRequested += HandleNewWindowRequested;
         core.ProcessFailed += HandleProcessFailed;
+        core.DocumentTitleChanged += (_, _) =>
+            Text = string.IsNullOrEmpty(core.DocumentTitle) ? "KTerm" : core.DocumentTitle;
         _bridge = new WebViewBridge(
             _webView,
             _sessions,

@@ -65,8 +65,74 @@ export function resolveTerminalTheme(name: string): ITheme {
 
 export function applyTerminalThemeToDocument(name: string): void {
   const theme = resolveTerminalTheme(name);
-  document.documentElement.style.setProperty(
-    '--terminal-background',
-    theme.background ?? '#0c0f14'
+  const root = document.documentElement.style;
+  const background = theme.background ?? '#0c0f14';
+  const foreground = theme.foreground ?? '#d8dee9';
+  const accent = theme.blue ?? '#5e81ac';
+  root.setProperty('--terminal-background', background);
+  for (const [property, value] of Object.entries(deriveChromePalette(background, foreground, accent))) {
+    root.setProperty(property, value);
+  }
+}
+
+// The window chrome (tab strips, sidebar, dividers) derives its palette from
+// the terminal theme so a theme switch recolors the whole window instead of
+// leaving the chrome stuck on the dark defaults. Mixing background toward
+// foreground lightens dark themes and darkens light ones with one formula.
+function deriveChromePalette(
+  background: string,
+  foreground: string,
+  accent: string
+): Record<string, string> {
+  const towardFg = (t: number): string => mix(background, foreground, t);
+  const bright = relativeLuminance(background) < 0.5
+    ? mix(foreground, '#ffffff', 0.25)
+    : mix(foreground, '#000000', 0.25);
+
+  return {
+    '--chrome-bg': towardFg(0.06),
+    '--chrome-bg-translucent': toRgba(towardFg(0.06), 0.93),
+    '--chrome-raised': towardFg(0.11),
+    '--chrome-active': towardFg(0.16),
+    '--chrome-hover': towardFg(0.21),
+    '--chrome-border': towardFg(0.17),
+    '--chrome-divider': towardFg(0.04),
+    '--chrome-text': foreground,
+    '--chrome-text-dim': mix(foreground, background, 0.3),
+    '--chrome-text-bright': bright,
+    '--chrome-accent': accent
+  };
+}
+
+function mix(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = parseHex(a);
+  const [br, bg, bb] = parseHex(b);
+  return toHex(
+    Math.round(ar + (br - ar) * t),
+    Math.round(ag + (bg - ag) * t),
+    Math.round(ab + (bb - ab) * t)
   );
+}
+
+function parseHex(color: string): [number, number, number] {
+  const match = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!match?.[1]) {
+    return [0, 0, 0];
+  }
+  const value = parseInt(match[1], 16);
+  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+}
+
+function toHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function toRgba(hex: string, alpha: number): string {
+  const [r, g, b] = parseHex(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function relativeLuminance(color: string): number {
+  const [r, g, b] = parseHex(color);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }

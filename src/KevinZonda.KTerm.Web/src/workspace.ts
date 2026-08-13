@@ -85,6 +85,7 @@ export class Workspace implements TerminalCallbacks {
     this.peekRail.addEventListener('pointerenter', () => this.cancelPeekClose());
     this.peekRail.addEventListener('pointerleave', () => this.schedulePeekClose());
     this.peekRail.addEventListener('click', this.handlePeekBackgroundClick);
+    this.sidebar.addEventListener('click', this.handleSidebarBackgroundClick);
 
     this.bridge.on('session.output', event => this.handleOutput(event));
     this.bridge.on('session.exited', event => this.handleExit(event));
@@ -195,6 +196,7 @@ export class Workspace implements TerminalCallbacks {
 
     tab.title = title.trim();
     this.refreshPaneTabs(pane);
+    this.syncWindowTitle();
   }
 
   private readonly handleKeyboard = (event: KeyboardEvent): void => {
@@ -535,6 +537,12 @@ export class Workspace implements TerminalCallbacks {
       this.setSidebarMode('expanded');
     }
   };
+  private readonly handleSidebarBackgroundClick = (event: MouseEvent): void => {
+    if (this.sidebarMode === 'expanded' &&
+        (event.target === this.sidebar || event.target === this.workspaceList)) {
+      this.setSidebarMode('hidden');
+    }
+  };
 
   private readonly handleWindowBlur = (): void => {
     this.cancelPeekOpen();
@@ -762,6 +770,7 @@ export class Workspace implements TerminalCallbacks {
     tabStrip.addEventListener('drop', event => this.handleTabDrop(event, pane.id, tabStrip));
     element.append(tabStrip);
     this.renderPaneTabs(pane, tabStrip);
+    this.watchTabStripOverflow(tabStrip);
 
     const content = document.createElement('div');
     content.className = 'pane-content';
@@ -970,7 +979,23 @@ export class Workspace implements TerminalCallbacks {
     const tabStrip = this.paneElements.get(pane.id)?.querySelector<HTMLElement>('.pane-tab-strip');
     if (tabStrip) {
       this.renderPaneTabs(pane, tabStrip);
+      this.updateTabStripOverflow(tabStrip);
     }
+  }
+
+  private watchTabStripOverflow(tabStrip: HTMLElement): void {
+    const update = () => this.updateTabStripOverflow(tabStrip);
+    tabStrip.addEventListener('scroll', update, { passive: true });
+    new ResizeObserver(update).observe(tabStrip);
+    update();
+  }
+
+  private updateTabStripOverflow(tabStrip: HTMLElement): void {
+    tabStrip.classList.toggle('scroll-left', tabStrip.scrollLeft > 1);
+    tabStrip.classList.toggle(
+      'scroll-right',
+      tabStrip.scrollLeft + tabStrip.clientWidth < tabStrip.scrollWidth - 1
+    );
   }
 
   private activateTab(paneId: string, sessionId: string): void {
@@ -1047,6 +1072,14 @@ export class Workspace implements TerminalCallbacks {
     this.terminals.forEach((terminal, sessionId) => {
       terminal.setFocused(sessionId === focusedSessionId);
     });
+
+    this.syncWindowTitle();
+  }
+
+  private syncWindowTitle(): void {
+    const pane = this.focusedPane;
+    const title = pane?.tabs.find(tab => tab.sessionId === pane.activeSessionId)?.title.trim();
+    document.title = title ? `${title} — KTerm` : 'KTerm';
   }
 
   private fitVisibleTerminals(immediate = false): void {
