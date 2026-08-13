@@ -36,6 +36,12 @@ interface WorkspaceState {
   focusedPaneId?: string;
 }
 
+interface TabDragState {
+  workspaceId: string;
+  paneId: string;
+  sessionId: string;
+}
+
 export class Workspace implements TerminalCallbacks {
   private static readonly EDGE_TRIGGER_WIDTH = 4;
   private static readonly MAX_WORKSPACE_NAME_LENGTH = 64;
@@ -64,6 +70,7 @@ export class Workspace implements TerminalCallbacks {
   private fontSaveTimer?: number;
   private peekOpenTimer?: number;
   private peekCloseTimer?: number;
+  private tabDrag?: TabDragState;
 
   public constructor(bridge: NativeBridge) {
     this.bridge = bridge;
@@ -733,6 +740,9 @@ export class Workspace implements TerminalCallbacks {
     const tabStrip = document.createElement('header');
     tabStrip.className = 'pane-tab-strip';
     tabStrip.setAttribute('aria-label', 'Pane terminal tabs');
+    tabStrip.addEventListener('dragover', event => this.handleTabDragOver(event, pane.id, tabStrip));
+    tabStrip.addEventListener('dragleave', event => this.handleTabDragLeave(event, tabStrip));
+    tabStrip.addEventListener('drop', event => this.handleTabDrop(event, pane.id, tabStrip));
     element.append(tabStrip);
     this.renderPaneTabs(pane, tabStrip);
 
@@ -751,7 +761,17 @@ export class Workspace implements TerminalCallbacks {
     for (const tab of pane.tabs) {
       const tabElement = document.createElement('div');
       tabElement.className = 'pane-tab';
+      tabElement.draggable = true;
+      tabElement.dataset.sessionId = tab.sessionId;
       tabElement.classList.toggle('active', tab.sessionId === pane.activeSessionId);
+      tabElement.addEventListener('dragstart', event => {
+        if ((event.target as HTMLElement | null)?.closest('.pane-tab-close')) {
+          event.preventDefault();
+          return;
+        }
+        this.handleTabDragStart(event, pane.id, tab.sessionId, tabElement);
+      });
+      tabElement.addEventListener('dragend', () => this.clearTabDragState());
       tabElement.addEventListener('pointerdown', event => {
         if (event.button === 1) {
           event.preventDefault();
@@ -797,6 +817,136 @@ export class Workspace implements TerminalCallbacks {
     add.addEventListener('click', () => void this.createTab(pane.id));
     fragment.append(add);
     tabStrip.replaceChildren(fragment);
+  }
+
+  private handleTabDragStart(
+    event: DragEvent,
+    paneId: string,
+    sessionId: string,
+    tabElement: HTMLElement
+  ): void {
+    const workspaceId = this.activeWorkspaceId;
+    if (!workspaceId || this.operationPending || !event.dataTransfer) {
+      event.preventDefault();
+      return;
+    }
+
+    this.tabDrag = { workspaceId, paneId, sessionId };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', sessionId);
+    tabElement.classList.add('dragging');
+  }
+
+  private handleTabDragOver(event: DragEvent, paneId: string, tabStrip: HTMLElement): void {
+    if (!this.canDropTab(paneId) || !event.dataTransfer) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    this.showTabDropPosition(tabStrip, this.tabDropIndex(tabStrip, event.clientX));
+  }
+
+  private handleTabDragLeave(event: DragEvent, tabStrip: HTMLElement): void {
+    const destination = event.relatedTarget;
+    if (destination instanceof Node && tabStrip.contains(destination)) {
+      return;
+    }
+    this.clearTabDropPosition(tabStrip);
+  }
+
+  private handleTabDrop(event: DragEvent, paneId: string, tabStrip: HTMLElement): void {
+    const drag = this.tabDrag;
+    if (!drag || !this.canDropTab(paneId)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const targetIndex = this.tabDropIndex(tabStrip, event.clientX);
+    this.clearTabDragState();
+    this.moveTerminalTab(drag.paneId, paneId, drag.sessionId, targetIndex);
+  }
+
+  private canDropTab(paneId: string): boolean {
+    return Boolean(
+      this.tabDrag &&
+      this.tabDrag.workspaceId === this.activeWorkspaceId &&
+      this.panes.has(this.tabDrag.paneId) &&
+      this.panes.has(paneId)
+    );
+  }
+
+  private tabDropIndex(tabStrip: HTMLElement, clientX: number): number {
+    const tabs = [...tabStrip.querySelectorAll<HTMLElement>('.pane-tab')];
+    const index = tabs.findIndex(tab => {
+      const bounds = tab.getBoundingClientRect();
+      return clientX < bounds.left + bounds.width / 2;
+    });
+    return index < 0 ? tabs.length : index;
+  }
+
+  private showTabDropPosition(tabStrip: HTMLElement, index: number): void {
+    this.workspace.querySelectorAll('.tab-drop-before').forEach(element => {
+      element.classList.remove('tab-drop-before');
+    });
+    const tabs = [...tabStrip.querySelectorAll<HTMLElement>('.pane-tab')];
+    (tabs[index] ?? tabStrip.querySelector('.pane-new-tab'))?.classList.add('tab-drop-before');
+  }
+
+  private clearTabDropPosition(tabStrip: HTMLElement): void {
+    tabStrip.querySelectorAll('.tab-drop-before').forEach(element => {
+      element.classList.remove('tab-drop-before');
+    });
+  }
+
+  private clearTabDragState(): void {
+    this.tabDrag = undefined;
+    this.workspace.querySelectorAll('.dragging, .tab-drop-before').forEach(element => {
+      element.classList.remove('dragging', 'tab-drop-before');
+    });
+  }
+
+  private moveTerminalTab(
+    sourcePaneId: string,
+    targetPaneId: string,
+    sessionId: string,
+    requestedTargetIndex: number
+  ): void {
+    const source = this.panes.get(sourcePaneId);
+    const target = this.panes.get(targetPaneId);
+    const sourceIndex = source?.tabs.findIndex(tab => tab.sessionId === sessionId) ?? -1;
+    if (!source || !target || sourceIndex < 0) {
+      return;
+    }
+
+    let targetIndex = Math.min(Math.max(requestedTargetIndex, 0), target.tabs.length);
+    if (source === target && targetIndex > sourceIndex) {
+      targetIndex--;
+    }
+    if (source === target && targetIndex === sourceIndex) {
+      return;
+    }
+
+    const [tab] = source.tabs.splice(sourceIndex, 1);
+    if (!tab) {
+      return;
+    }
+    target.tabs.splice(targetIndex, 0, tab);
+
+    if (source !== target && source.activeSessionId === sessionId && source.tabs.length > 0) {
+      source.activeSessionId = source.tabs[Math.min(sourceIndex, source.tabs.length - 1)]!.sessionId;
+    }
+    target.activeSessionId = sessionId;
+
+    if (source.tabs.length === 0) {
+      this.panes.delete(source.id);
+      this.root = this.root ? this.removePaneLeaf(this.root, source.id) ?? undefined : undefined;
+    }
+
+    this.focusedPaneId = target.id;
+    this.render();
+    this.focusSession(sessionId);
   }
 
   private refreshPaneTabs(pane: PaneState): void {

@@ -326,6 +326,15 @@ button {
   overflow: hidden;
 }
 
+.pane-tab.dragging {
+  opacity: 0.45;
+}
+
+.pane-tab.tab-drop-before,
+.pane-new-tab.tab-drop-before {
+  box-shadow: inset 3px 0 #88c0d0;
+}
+
 .pane-tab.active {
   background: #0c0f14;
   border-color: #323a47;
@@ -342,11 +351,16 @@ button {
 
 .pane-tab-activate {
   padding: 0 8px;
+  cursor: grab;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   text-align: left;
   font-size: 12px;
+}
+
+.pane-tab.dragging .pane-tab-activate {
+  cursor: grabbing;
 }
 
 .pane-tab-close {
