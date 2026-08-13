@@ -17,6 +17,7 @@ internal sealed class WebViewBridge : IDisposable
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
     private readonly Action _openSettings;
+    private readonly Action<string> _openExternal;
     private readonly Func<double, Task<AppSettings>> _saveFontSize;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _outputQueues = new();
     private readonly System.Windows.Forms.Timer _outputTimer;
@@ -27,12 +28,14 @@ internal sealed class WebViewBridge : IDisposable
         WebView2 webView,
         TerminalSessionManager sessions,
         Action openSettings,
+        Action<string> openExternal,
         Func<double, Task<AppSettings>> saveFontSize,
         AppSettings settings)
     {
         _webView = webView;
         _sessions = sessions;
         _openSettings = openSettings;
+        _openExternal = openExternal;
         _saveFontSize = saveFontSize;
         _settings = settings;
         _sessions.OutputReceived += QueueOutput;
@@ -120,6 +123,10 @@ internal sealed class WebViewBridge : IDisposable
 
                 case "window.settings":
                     _webView.BeginInvoke(_openSettings);
+                    break;
+
+                case "window.openExternal":
+                    _openExternal(GetString(message.Payload, "uri"));
                     break;
 
                 case "settings.fontSize":

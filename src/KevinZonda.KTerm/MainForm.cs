@@ -137,6 +137,7 @@ internal sealed class MainForm : Form
             _webView,
             _sessions,
             ShowSettings,
+            OpenExternal,
             SaveFontSize,
             _settings);
 

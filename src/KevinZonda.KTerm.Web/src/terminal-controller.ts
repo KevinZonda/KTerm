@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import type { IDisposable } from '@xterm/xterm';
@@ -62,6 +63,7 @@ export class TerminalController {
       theme: resolveTerminalTheme(theme.name)
     });
     this.terminal.loadAddon(this.fitAddon);
+    this.terminal.loadAddon(new WebLinksAddon((_event, uri) => this.bridge.openExternal(uri)));
 
     this.disposables.push(
       this.terminal.onData(data => this.bridge.sendInput(this.sessionId, data)),

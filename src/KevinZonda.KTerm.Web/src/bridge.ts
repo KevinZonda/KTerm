@@ -89,6 +89,10 @@ export class NativeBridge {
     this.send('window.settings', {});
   }
 
+  public openExternal(uri: string): void {
+    this.send('window.openExternal', { uri });
+  }
+
   public async saveFontSize(size: number): Promise<AppSettings> {
     return this.settingsFrom(await this.request('settings.fontSize', { size }));
   }
