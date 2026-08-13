@@ -62,11 +62,20 @@ internal static class ConHost
         return ExtractBundledOpenConsole();
     }
 
+    /// <summary>
+    /// Raised when the extracted OpenConsole.exe fails its integrity check.
+    /// Return true to re-extract from the embedded copy, false to fall back to
+    /// the inbox conhost. When unset, mismatches are repaired silently. The
+    /// mismatched file is never executed regardless of the outcome.
+    /// </summary>
+    internal static Func<string, bool>? IntegrityConflictHandler;
+
     // Single-file distribution: OpenConsole.exe is embedded as a resource and
     // extracted once to a content-addressed cache directory, because Windows
     // can only CreateProcess a real file. The directory name carries the hash
     // of the embedded copy, so upgrades extract fresh and unchanged installs
-    // reuse the cache.
+    // reuse the cache. Reused files are re-verified against the embedded copy:
+    // a mismatch means corruption or tampering, and the file is never used.
     private static string? ExtractBundledOpenConsole()
     {
         try
@@ -81,15 +90,28 @@ internal static class ConHost
             using var memory = new MemoryStream();
             stream.CopyTo(memory);
             var bytes = memory.ToArray();
+            var expectedHash = SHA256.HashData(bytes);
 
-            var hash = Convert.ToHexString(SHA256.HashData(bytes))[..8].ToLowerInvariant();
+            var hash = Convert.ToHexString(expectedHash)[..8].ToLowerInvariant();
             var directory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "KTerm", "bin", hash);
             var candidate = Path.Combine(directory, "OpenConsole.exe");
-            if (File.Exists(candidate) && new FileInfo(candidate).Length == bytes.Length)
+
+            if (File.Exists(candidate))
             {
-                return candidate;
+                if (HashesMatch(candidate, expectedHash))
+                {
+                    return candidate;
+                }
+
+                // Corruption or tampering: surface it, never run the file.
+                System.Diagnostics.Debug.WriteLine(
+                    $"Extracted OpenConsole.exe failed its integrity check: {candidate}");
+                if (IntegrityConflictHandler?.Invoke(candidate) == false)
+                {
+                    return null;
+                }
             }
 
             Directory.CreateDirectory(directory);
@@ -97,12 +119,27 @@ internal static class ConHost
             var temporary = $"{candidate}.{Environment.ProcessId}.tmp";
             File.WriteAllBytes(temporary, bytes);
             File.Move(temporary, candidate, overwrite: true);
-            return candidate;
+
+            // Re-verify what actually landed on disk before using it.
+            return HashesMatch(candidate, expectedHash) ? candidate : null;
         }
         catch (Exception error)
         {
             System.Diagnostics.Debug.WriteLine($"Unable to extract the bundled OpenConsole.exe: {error}");
             return null;
+        }
+    }
+
+    private static bool HashesMatch(string path, byte[] expectedHash)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return SHA256.HashData(stream).AsSpan().SequenceEqual(expectedHash);
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 }

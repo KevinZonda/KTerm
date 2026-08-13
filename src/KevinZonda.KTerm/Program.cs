@@ -1,3 +1,4 @@
+using KevinZonda.KTerm.Interop;
 using KevinZonda.KTerm.Terminal;
 
 namespace KevinZonda.KTerm;
@@ -45,6 +46,34 @@ internal static class Program
                 MessageBoxIcon.Error);
             return;
         }
+
+        // Alert when the cached OpenConsole.exe fails its integrity check: the
+        // file may be corrupted or tampered with, and it is never executed.
+        // A "no" decision is remembered so later sessions in this run don't nag.
+        var integrityDeclined = false;
+        ConHost.IntegrityConflictHandler = path =>
+        {
+            if (integrityDeclined)
+            {
+                return false;
+            }
+
+            var choice = MessageBox.Show(
+                $"缓存的终端主机文件与 KTerm 内置副本不一致：\n\n{path}\n\n" +
+                "可能是磁盘损坏，也可能是被其他程序篡改。KTerm 不会使用这个文件。\n\n" +
+                "是否从内置副本重新释放？\n\n" +
+                "是：重新释放并继续\n否：本次运行回退到系统控制台（部分终端功能受限）",
+                "KTerm security warning",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button1);
+            if (choice == DialogResult.No)
+            {
+                integrityDeclined = true;
+                return false;
+            }
+            return true;
+        };
 
         Application.Run(new MainForm(startingDirectory));
     }

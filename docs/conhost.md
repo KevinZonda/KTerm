@@ -164,8 +164,10 @@ WT 安装包里有 `OpenConsole.exe`（约 1MB，MIT 许可），但**没有**
 分发方式：`OpenConsole.exe` 存放于 `tools/openconsole/`，构建时作为
 `EmbeddedResource`（逻辑名 `KTerm.Binaries/OpenConsole.exe`）嵌入程序集；
 首次创建终端会话时释放到 `%LOCALAPPDATA%\KTerm\bin\<sha256前8位>\
-OpenConsole.exe`（写临时文件 + 原子移动；已存在且大小一致则复用）。
-`PublishSingleFile` 产物因此保持单个 exe 自洽。查找顺序：应用目录 →
+OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文件做 SHA256
+复核：与嵌入副本不一致（损坏或被篡改）时**绝不执行该文件**，弹窗告知
+用户并可选择重新释放（释放后再校验一次）或回退系统 conhost；同一进程内
+选择回退后不再重复弹窗。查找顺序：应用目录 →
 架构子目录 → 嵌入资源释放 → 回退 kernel conhost。
 
 ### 4.3 过程中抓到的一个真 bug：handle list use-after-free
