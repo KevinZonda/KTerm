@@ -260,9 +260,6 @@ export class Workspace implements TerminalCallbacks {
 
     this.workspaces.push(workspace);
     this.activeWorkspaceId = workspace.id;
-    if (this.workspaces.length === 2) {
-      this.setSidebarVisible(true);
-    }
     this.renderSidebar();
     this.render();
     this.focusSession(session.sessionId);
