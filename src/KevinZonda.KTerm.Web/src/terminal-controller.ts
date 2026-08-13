@@ -18,6 +18,8 @@ export class TerminalController {
   // Chromium reports pixel wheel deltas; 40px per line matches the normal
   // buffer scroll feel (a typical 120px notch scrolls 3 lines).
   private static readonly ALT_SCROLL_PIXELS_PER_LINE = 40;
+  // Grace period before a hidden pane's WebGL context is reclaimed.
+  private static readonly WEBGL_RECLAIM_DELAY_MS = 30_000;
 
   public readonly sessionId: string;
   public readonly element: HTMLDivElement;
@@ -32,12 +34,15 @@ export class TerminalController {
   // xterm.js cannot answer OSC color queries until open() creates its theme service.
   private readonly pendingWrites: string[] = [];
   private webglAddon?: WebglAddon;
+  private webglFailed = false;
+  private webglReclaimTimer?: number;
   private opened = false;
   private exited = false;
   private fitTimer?: number;
   private lastCols = 0;
   private lastRows = 0;
   private altScrollRemainder = 0;
+  private altScrollWasAltBuffer = false;
 
   public constructor(
     session: SessionCreated,
@@ -111,6 +116,49 @@ export class TerminalController {
     }
 
     this.scheduleFit();
+  }
+
+  // Keeps the GPU renderer aligned with visibility: panes that stay hidden for
+  // a while release their WebGL context (xterm.js seamlessly uses its built-in
+  // renderer), visible panes get one back. Reclaiming is deferred so quick tab
+  // switches don't churn context creation.
+  public setVisible(visible: boolean): void {
+    if (!this.opened) {
+      return;
+    }
+
+    if (visible) {
+      this.cancelWebglReclaim();
+      if (!this.webglAddon && !this.webglFailed) {
+        this.enableWebgl();
+      }
+      return;
+    }
+
+    if (this.webglAddon && this.webglReclaimTimer === undefined) {
+      this.webglReclaimTimer = window.setTimeout(() => {
+        this.webglReclaimTimer = undefined;
+        this.disposeWebgl();
+      }, TerminalController.WEBGL_RECLAIM_DELAY_MS);
+    }
+  }
+
+  private cancelWebglReclaim(): void {
+    if (this.webglReclaimTimer !== undefined) {
+      window.clearTimeout(this.webglReclaimTimer);
+      this.webglReclaimTimer = undefined;
+    }
+  }
+
+  private disposeWebgl(): void {
+    if (!this.webglAddon) {
+      return;
+    }
+
+    this.webglAddon.dispose();
+    this.webglAddon = undefined;
+    this.element.classList.remove('renderer-webgl');
+    this.element.classList.add('renderer-fallback');
   }
 
   public write(data: string): void {
@@ -195,6 +243,7 @@ export class TerminalController {
     if (this.fitTimer !== undefined) {
       window.clearTimeout(this.fitTimer);
     }
+    this.cancelWebglReclaim();
     this.pendingWrites.length = 0;
     this.host.removeEventListener('wheel', this.handleWheel, { capture: true });
     this.resizeObserver.disconnect();
@@ -218,6 +267,7 @@ export class TerminalController {
       this.webglAddon = addon;
       this.element.classList.add('renderer-webgl');
     } catch {
+      this.webglFailed = true;
       this.element.classList.add('renderer-fallback');
     }
   }
@@ -275,8 +325,13 @@ export class TerminalController {
     // the wheel into input, so without mouse reporting the wheel would be a
     // no-op. Send arrow keys like Windows Terminal does, letting fullscreen
     // apps such as codex scroll their own transcript.
-    if (this.terminal.modes.mouseTrackingMode !== 'none' ||
-        this.terminal.buffer.active.type !== 'alternate') {
+    const isAltBuffer = this.terminal.buffer.active.type === 'alternate';
+    if (isAltBuffer !== this.altScrollWasAltBuffer) {
+      // Don't leak a fractional remainder across a buffer switch.
+      this.altScrollWasAltBuffer = isAltBuffer;
+      this.altScrollRemainder = 0;
+    }
+    if (this.terminal.modes.mouseTrackingMode !== 'none' || !isAltBuffer) {
       return;
     }
 
