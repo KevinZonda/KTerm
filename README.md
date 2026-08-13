@@ -35,7 +35,7 @@ KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。�
 - .NET 10 SDK
 - Node.js 与 pnpm
 - Microsoft Edge WebView2 Evergreen Runtime
-- （可选）`tools/openconsole/OpenConsole.exe`：passthrough ConPTY 主机，缺失时自动回退系统 conhost
+- （可选）`tools/openconsole/OpenConsole.exe`：passthrough ConPTY 主机，构建时嵌入程序集，首次运行释放到 `%LOCALAPPDATA%\KTerm\bin`；缺失或释放失败时自动回退系统 conhost
 
 ```powershell
 dotnet build KevinZonda.KTerm.slnx

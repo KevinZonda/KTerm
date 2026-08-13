@@ -23,14 +23,13 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4181-prerelease" />
   </ItemGroup>
 
-  <!-- Passthrough ConPTY host (from Windows Terminal, MIT). When present, sessions
-       prefer it over the inbox conhost so VT sequences reach the terminal verbatim. -->
+  <!-- Passthrough ConPTY host (from Windows Terminal, MIT), embedded into the
+       assembly and extracted on first use so single-file publish stays single.
+       When the resource is absent, sessions fall back to the inbox conhost. -->
   <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe')">
-    <None Include="$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe">
-      <Link>OpenConsole.exe</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
+    <EmbeddedResource Include="$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe">
+      <LogicalName>KTerm.Binaries/OpenConsole.exe</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <Target Name="BuildWebAssets" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">

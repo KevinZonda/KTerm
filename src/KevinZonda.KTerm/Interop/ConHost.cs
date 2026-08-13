@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
 namespace KevinZonda.KTerm.Interop;
@@ -58,6 +59,50 @@ internal static class ConHost
             }
         }
 
-        return null;
+        return ExtractBundledOpenConsole();
+    }
+
+    // Single-file distribution: OpenConsole.exe is embedded as a resource and
+    // extracted once to a content-addressed cache directory, because Windows
+    // can only CreateProcess a real file. The directory name carries the hash
+    // of the embedded copy, so upgrades extract fresh and unchanged installs
+    // reuse the cache.
+    private static string? ExtractBundledOpenConsole()
+    {
+        try
+        {
+            using var stream = typeof(ConHost).Assembly
+                .GetManifestResourceStream("KTerm.Binaries/OpenConsole.exe");
+            if (stream is null)
+            {
+                return null;
+            }
+
+            using var memory = new MemoryStream();
+            stream.CopyTo(memory);
+            var bytes = memory.ToArray();
+
+            var hash = Convert.ToHexString(SHA256.HashData(bytes))[..8].ToLowerInvariant();
+            var directory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "KTerm", "bin", hash);
+            var candidate = Path.Combine(directory, "OpenConsole.exe");
+            if (File.Exists(candidate) && new FileInfo(candidate).Length == bytes.Length)
+            {
+                return candidate;
+            }
+
+            Directory.CreateDirectory(directory);
+            // Write-then-move so concurrent KTerm instances never see a partial file.
+            var temporary = $"{candidate}.{Environment.ProcessId}.tmp";
+            File.WriteAllBytes(temporary, bytes);
+            File.Move(temporary, candidate, overwrite: true);
+            return candidate;
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine($"Unable to extract the bundled OpenConsole.exe: {error}");
+            return null;
+        }
     }
 }
