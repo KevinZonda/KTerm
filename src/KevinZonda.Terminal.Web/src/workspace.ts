@@ -145,8 +145,8 @@ export class Workspace implements TerminalCallbacks {
     this.setStatus('');
   }
 
-  public async createWorkspace(): Promise<void> {
-    await this.runExclusive(() => this.createWorkspaceCore());
+  public async createWorkspace(activate = false): Promise<void> {
+    await this.runExclusive(() => this.createWorkspaceCore(activate));
   }
 
   public async createTab(paneId = this.focusedPaneId): Promise<void> {
@@ -322,12 +322,12 @@ export class Workspace implements TerminalCallbacks {
         this.setSidebarMode(this.sidebarMode === 'expanded' ? 'hidden' : 'expanded');
         break;
       case 'newWorkspace':
-        void this.createWorkspace();
+        void this.createWorkspace(true);
         break;
     }
   }
 
-  private async createWorkspaceCore(): Promise<void> {
+  private async createWorkspaceCore(activate = false): Promise<void> {
     this.setStatus('Starting workspace…');
     const session = await this.bridge.createSession();
     this.addTerminal(session);
@@ -346,15 +346,16 @@ export class Workspace implements TerminalCallbacks {
     };
 
     this.workspaces.push(workspace);
-    // Keep the current workspace active; only jump to the new one when
-    // there is none (startup, or after the last workspace was closed).
-    if (this.activeWorkspaceId) {
-      this.renderSidebar();
-    } else {
+    // Shortcut-created workspaces activate immediately. Other entry points
+    // keep the current workspace active unless there is none (startup, or
+    // after the last workspace was closed).
+    if (activate || !this.activeWorkspaceId) {
       this.activeWorkspaceId = workspace.id;
       this.renderSidebar();
       this.render();
       this.focusSession(session.sessionId);
+    } else {
+      this.renderSidebar();
     }
     this.setStatus('');
   }
