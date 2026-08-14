@@ -4,7 +4,7 @@
 [Windows Terminal](https://github.com/microsoft/terminal) (MIT license),
 copied from an installed Windows Terminal package.
 
-At build time it is embedded into the KTerm assembly (`KTerm.Binaries/OpenConsole.exe`);
+At build time it is embedded into the KevinZonda Terminal assembly (`KevinZonda.Terminal.Binaries/OpenConsole.exe`);
 on first use it is extracted to `%LOCALAPPDATA%\KTerm\bin\<hash>\OpenConsole.exe`
 and spawned from there (`--headless --width --height --signal --server`) through
 the winconpty protocol instead of the inbox `CreatePseudoConsole`. Cached files
@@ -15,5 +15,5 @@ the terminal (passthrough ConPTY). The inbox conhost on Windows 10 consumes
 scroll-region and other VT sequences and repaints the screen instead, which
 destroys scrollback for TUI apps such as codex.
 
-If the resource is absent or extraction fails, KTerm automatically falls back
+If the resource is absent or extraction fails, KevinZonda Terminal automatically falls back
 to the inbox conhost.

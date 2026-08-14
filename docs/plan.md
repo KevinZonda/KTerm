@@ -1,4 +1,4 @@
-# KTerm MVP 实现计划
+# KevinZonda Terminal MVP 实现计划
 
 ## 1. 目标与当前状态
 
@@ -17,7 +17,7 @@ MVP 必须支持：
 - 调整窗口或拖动分隔线时，正确更新对应 ConPTY 的行列数。
 - 使用 xterm.js WebGL renderer，并在 WebGL 不可用或 context lost 时安全回退。
 
-快捷键只在 KTerm 位于前台时生效，不注册系统全局热键，也不安装低级键盘钩子。
+快捷键只在 KevinZonda Terminal 位于前台时生效，不注册系统全局热键，也不安装低级键盘钩子。
 
 ## 2. MVP 技术选型
 
@@ -52,7 +52,7 @@ MVP 必须支持：
 ## 3. 总体架构
 
 ```text
-KTerm WinForms Process
+KevinZonda Terminal WinForms Process
 ├─ MainForm
 │  └─ WebView2（铺满 client area）
 │     └─ Web App Shell
@@ -87,12 +87,12 @@ KTerm WinForms Process
 实现阶段按以下结构初始化：
 
 ```text
-kterm/
+kevinzonda-terminal/
 ├─ docs/
 │  └─ plan.md
 ├─ src/
-│  ├─ KTerm.App/
-│  │  ├─ KTerm.App.csproj
+│  ├─ KevinZonda.Terminal/
+│  │  ├─ KevinZonda.Terminal.csproj
 │  │  ├─ Program.cs
 │  │  ├─ MainForm.cs
 │  │  ├─ WebView/
@@ -100,7 +100,7 @@ kterm/
 │  │  ├─ Interop/
 │  │  ├─ Messaging/
 │  │  └─ wwwroot/           # 前端构建产物，不手工编辑
-│  └─ KTerm.Web/
+│  └─ KevinZonda.Terminal.Web/
 │     ├─ package.json
 │     ├─ vite.config.ts
 │     └─ src/
@@ -110,12 +110,12 @@ kterm/
 │        ├─ bridge/
 │        └─ styles/
 ├─ tests/
-│  ├─ KTerm.App.Tests/
-│  └─ KTerm.Web.Tests/
-└─ KTerm.sln
+│  ├─ KevinZonda.Terminal.Tests/
+│  └─ KevinZonda.Terminal.Web.Tests/
+└─ KevinZonda.Terminal.slnx
 ```
 
-前端和宿主分开开发，但发布时前端只是 KTerm.App 的静态资源，不会附带 Node.js runtime。
+前端和宿主分开开发，但发布时前端只是 KevinZonda.Terminal 的静态资源，不会附带 Node.js runtime。
 
 ## 5. Pane Tab 与 Split 数据模型
 
@@ -482,7 +482,7 @@ WebView2 进程模型包括 browser、renderer 和 GPU 等进程。单个页面�
 ## 15. MVP 明确不做
 
 - SSH/SFTP 内置客户端。
-- tmux 协议集成；MVP 的分屏由 KTerm 自己管理，每个 Pane 是独立 ConPTY。
+- tmux 协议集成；MVP 的分屏由 KevinZonda Terminal 自己管理，每个 Pane 是独立 ConPTY。
 - 跨平台支持。
 - 全局快捷键和后台唤起。
 - 工作区/session 跨重启恢复。

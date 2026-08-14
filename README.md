@@ -1,6 +1,6 @@
-# KevinZonda.KTerm
+# KevinZonda Terminal
 
-KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。原生宿主使用 .NET 10 WinForms 和 WebView2；终端前端使用 xterm.js/WebGL；每个 Pane 都连接独立的 ConPTY 和 Shell 进程。终端会话优先使用随应用分发的 passthrough ConPTY（`OpenConsole.exe`，来自 Windows Terminal，MIT），让 DECSTBM 等 VT 序列原样到达前端；该文件缺失时自动回退到系统 inbox conhost。
+KevinZonda Terminal 是一个面向 Windows 的最小化 Terminal Emulator MVP。原生宿主使用 .NET 10 WinForms 和 WebView2；终端前端使用 xterm.js/WebGL；每个 Pane 都连接独立的 ConPTY 和 Shell 进程。终端会话优先使用随应用分发的 passthrough ConPTY（`OpenConsole.exe`，来自 Windows Terminal，MIT），让 DECSTBM 等 VT 序列原样到达前端；该文件缺失时自动回退到系统 inbox conhost。
 
 ## 当前功能
 
@@ -25,7 +25,7 @@ KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。�
 | `Ctrl+Shift+C` | 复制终端选择 |
 | `Ctrl+Shift+V` | 粘贴到聚焦终端 |
 
-快捷键只在 KTerm 位于前台时生效。
+快捷键只在 KevinZonda Terminal 位于前台时生效。
 
 ## 构建和运行
 
@@ -38,11 +38,13 @@ KevinZonda.KTerm 是一个面向 Windows 的最小化 Terminal Emulator MVP。�
 - （可选）`tools/openconsole/OpenConsole.exe`：passthrough ConPTY 主机，构建时嵌入程序集，首次运行释放到 `%LOCALAPPDATA%\KTerm\bin`；缺失或释放失败时自动回退系统 conhost
 
 ```powershell
-dotnet build KevinZonda.KTerm.slnx
-dotnet run --project src\KevinZonda.KTerm\KevinZonda.KTerm.csproj
+dotnet build KevinZonda.Terminal.slnx
+dotnet run --project src\KevinZonda.Terminal\KevinZonda.Terminal.csproj
 ```
 
 `.csproj` 会执行前端的 `pnpm install --frozen-lockfile`（首次）和 `pnpm run build`，随后把 Vite 产物嵌入应用程序集。
+
+为兼容已有安装，用户数据仍沿用 `%USERPROFILE%\.kterm` 和 `%LOCALAPPDATA%\KTerm`，诊断环境变量仍使用 `KTERM_*` 前缀，`make install` 仍安装命令别名 `zt.exe`。这些是稳定的内部兼容标识，对外产品名统一为 KevinZonda Terminal。
 
 运行 Debug 端到端 smoke test（自动创建两个 Tab，并在活动 Tab 构造 2×2）：
 
@@ -53,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File scripts\smoke.ps1
 发布启用 ReadyToRun 的 framework-dependent win-x64 版本：
 
 ```powershell
-dotnet publish src\KevinZonda.KTerm\KevinZonda.KTerm.csproj -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true
+dotnet publish src\KevinZonda.Terminal\KevinZonda.Terminal.csproj -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true
 ```
 
 详细架构、消息协议与验收标准参见 [docs/plan.md](docs/plan.md)。

@@ -1,13 +1,13 @@
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repositoryRoot 'src\KevinZonda.KTerm\KevinZonda.KTerm.csproj'
-$executable = Join-Path $repositoryRoot 'src\KevinZonda.KTerm\bin\Debug\net10.0-windows\KevinZonda.KTerm.exe'
+$project = Join-Path $repositoryRoot 'src\KevinZonda.Terminal\KevinZonda.Terminal.csproj'
+$executable = Join-Path $repositoryRoot 'src\KevinZonda.Terminal\bin\Debug\net10.0-windows\KevinZonda.Terminal.exe'
 $environmentProbe = Join-Path ([IO.Path]::GetTempPath()) "kterm-smoke-$([Guid]::NewGuid().ToString('N')).txt"
 
 dotnet build $project --nologo
 if ($LASTEXITCODE -ne 0) {
-    throw "KTerm build failed with exit code $LASTEXITCODE."
+    throw "KevinZonda Terminal build failed with exit code $LASTEXITCODE."
 }
 
 $env:KTERM_SMOKE_TEST = '1'
@@ -27,7 +27,7 @@ try {
         Start-Sleep -Milliseconds 250
         $application.Refresh()
         if ($application.HasExited) {
-            throw "KTerm exited during smoke initialization with code $($application.ExitCode)."
+            throw "KevinZonda Terminal exited during smoke initialization with code $($application.ExitCode)."
         }
 
         $children = @(Get-CimInstance Win32_Process | Where-Object ParentProcessId -eq $application.Id)
@@ -61,17 +61,17 @@ finally {
         $null = $application.CloseMainWindow()
         if (-not $application.WaitForExit(12000)) {
             $application.Kill()
-            throw 'KTerm did not close cleanly within 12 seconds.'
+            throw 'KevinZonda Terminal did not close cleanly within 12 seconds.'
         }
     }
 
     Start-Sleep -Milliseconds 800
     $remaining = @(Get-Process -Id $childProcessIds -ErrorAction SilentlyContinue)
     if ($remaining.Count -ne 0) {
-        throw "KTerm left $($remaining.Count) child processes running after shutdown."
+        throw "KevinZonda Terminal left $($remaining.Count) child processes running after shutdown."
     }
 
     [IO.File]::Delete($environmentProbe)
 }
 
-Write-Output 'KTerm smoke test passed: xterm-256color/truecolor, 2 tabs, 2x2 active layout, 5 Shells, 5 ConPTY hosts, 0 leaked child processes.'
+Write-Output 'KevinZonda Terminal smoke test passed: xterm-256color/truecolor, 2 tabs, 2x2 active layout, 5 Shells, 5 ConPTY hosts, 0 leaked child processes.'

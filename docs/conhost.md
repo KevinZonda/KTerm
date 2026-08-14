@@ -1,11 +1,11 @@
 # ConHost 调查：codex 滚动历史丢失问题与 passthrough ConPTY 方案
 
-本文记录 2026-08 对"codex 在 KTerm 中滚轮无法查看历史"问题的完整调查过程、
+本文记录 2026-08 对“codex 在 KevinZonda Terminal 中滚轮无法查看历史”问题的完整调查过程、
 被排除的假设、最终根因，以及落地实现的 passthrough ConPTY 架构。
 
 ## 1. 问题现象
 
-在 KTerm 中运行 `codex resume <session-id>`：
+在 KevinZonda Terminal 中运行 `codex resume <session-id>`：
 
 - 会话内容超过当前可见高度后，鼠标滚轮无法看到前文，也没有 scrollbar。
 - 把终端拉高再缩回后，scrollbar 出现，可以滚动——但只能滚到"拉高期间
@@ -35,7 +35,7 @@ cursor 模式的 `\x1bOA/OB` 发给 ConPTY）。该修复保留，但对 codex �
 
 ### 2.2 实证工具：conpty-dump
 
-为了不再猜测，写了一个一次性抓包工具（用后即删）：复用 KTerm 的 ConPTY
+为了不再猜测，写了一个一次性抓包工具（用后即删）：复用 KevinZonda Terminal 的 ConPTY
 P/Invoke，在 ConPTY 中启动 `codex resume`，分阶段记录"启动 → 拉高 → 缩回"
 的全量输出字节流。
 
@@ -44,7 +44,7 @@ P/Invoke，在 ConPTY 中启动 `codex resume`，分阶段记录"启动 → 拉�
 1. **子进程 std 句柄继承**：带 `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` 启动
    的子进程，若父进程自己有 std 句柄（如从 bash 启动的管道），子进程会
    继承这些管道而非拿到 console 句柄，导致 codex 的 `is_terminal` 检查
-   报 "stdin is not a terminal"。KTerm 是无 std 句柄的 GUI 程序所以没
+   报 "stdin is not a terminal"。KevinZonda Terminal 是无 std 句柄的 GUI 程序所以没
    踩到。对策：工具里 `FreeConsole()` + `SetStdHandle(..., NULL)`。
 2. 详见第 4.3 节的 handle list use-after-free。
 
@@ -90,7 +90,7 @@ region scroll：
 
 ### 3.2 Win10 的 inbox conhost 是重绘式渲染器
 
-KTerm 用 kernel32 `CreatePseudoConsole`，由 OS 拉起 `System32\conhost.exe`。
+KevinZonda Terminal 用 kernel32 `CreatePseudoConsole`，由 OS 拉起 `System32\conhost.exe`。
 Win10 22H2（19045）的这个 conhost 会把应用的 region scroll 消化进自己的
 屏幕缓冲区，再**整屏重绘**给终端客户端。抓包实证：输出流中
 DECSTBM/RI/IL/SU/SD 出现次数全部为 0。历史行在这一层就丢了，前端做什么
@@ -162,7 +162,7 @@ WT 安装包里有 `OpenConsole.exe`（约 1MB，MIT 许可），但**没有**
 协议而非复用 dll。
 
 分发方式：`OpenConsole.exe` 存放于 `tools/openconsole/`，构建时作为
-`EmbeddedResource`（逻辑名 `KTerm.Binaries/OpenConsole.exe`）嵌入程序集；
+`EmbeddedResource`（逻辑名 `KevinZonda.Terminal.Binaries/OpenConsole.exe`）嵌入程序集；
 首次创建终端会话时释放到 `%LOCALAPPDATA%\KTerm\bin\<sha256前8位>\
 OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文件做 SHA256
 复核：与嵌入副本不一致（损坏或被篡改）时**绝不执行该文件**，弹窗告知
@@ -195,7 +195,7 @@ OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文�
 ## 6. 遗留事项与边界
 
 - codex 对 resize 重放有按终端的行数上限（`resize_reflow_cap.rs`：WT
-  9001 / VSCode 1000 / 未知终端走 fallback）。KTerm 是未知终端，超长
+  9001 / VSCode 1000 / 未知终端走 fallback）。KevinZonda Terminal 是未知终端，超长
   历史在 resize 后可能被截断；需要时可通过环境变量伪装终端身份，或等
   codex 上游调整。
 - codex 的 resize 重放会先 `\x1b[3J` 清 scrollback 再重放，resize 后
@@ -215,7 +215,7 @@ OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文�
 - Windows Terminal 源码：`src/winconpty/winconpty.cpp`、`winconpty.h`、
   `src/server/DeviceHandle.cpp`、`src/host/_stream.cpp`（WriteCharsVT）、
   `src/terminal/adapter/adaptDispatch.cpp`（_DoLineFeed）
-- KTerm 实现：`src/KevinZonda.KTerm/Interop/`（IConHost、ConHost、
+- KevinZonda Terminal 实现：`src/KevinZonda.Terminal/Interop/`（IConHost、ConHost、
   KernelConHost、OpenConsoleConHost、NativeMethods.Conpty）、
   `tools/openconsole/README.md`
 - 上游 issue：openai/codex#27644、#30745、#35335、#36474、#37635

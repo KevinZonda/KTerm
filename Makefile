@@ -1,9 +1,9 @@
-SOLUTION := KevinZonda.KTerm.slnx
-PROJECT := src/KevinZonda.KTerm/KevinZonda.KTerm.csproj
-WEB_DIR := src/KevinZonda.KTerm.Web
+SOLUTION := KevinZonda.Terminal.slnx
+PROJECT := src/KevinZonda.Terminal/KevinZonda.Terminal.csproj
+WEB_DIR := src/KevinZonda.Terminal.Web
 SMOKE_TEST := scripts/smoke.ps1
-PUBLISH_DIR := src/KevinZonda.KTerm/bin/Release/net10.0-windows/win-x64/publish
-PUBLISH_EXE := $(PUBLISH_DIR)/KevinZonda.KTerm.exe
+PUBLISH_DIR := src/KevinZonda.Terminal/bin/Release/net10.0-windows/win-x64/publish
+PUBLISH_EXE := $(PUBLISH_DIR)/KevinZonda.Terminal.exe
 INSTALL_DIR := C:/Tools/Bin
 INSTALL_EXE := $(INSTALL_DIR)/zt.exe
 
@@ -18,8 +18,8 @@ help:
 	@echo "  make deps      - restore NuGet and pnpm dependencies"
 	@echo "  make install   - publish and install C:\Tools\Bin\zt.exe"
 	@echo "  make web       - type-check and build the web frontend"
-	@echo "  make build     - build KTerm; CONFIG=Debug by default"
-	@echo "  make run       - build and run KTerm"
+	@echo "  make build     - build KevinZonda Terminal; CONFIG=Debug by default"
+	@echo "  make run       - build and run KevinZonda Terminal"
 	@echo "  make test      - run the 2x2 ConPTY smoke test"
 	@echo "  make format    - verify C# formatting"
 	@echo "  make audit     - audit NuGet and pnpm dependencies"
