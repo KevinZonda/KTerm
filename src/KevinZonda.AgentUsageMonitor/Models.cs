@@ -22,14 +22,24 @@ public sealed record UsageWindow(
     double? Used = null,
     double? Limit = null);
 
-public sealed record UsageCredits(double? Remaining, bool IsUnlimited = false);
+public sealed record UsageCredits(double? Remaining, bool IsUnlimited = false)
+{
+    public double? Total { get; init; }
+
+    public string? Currency { get; init; }
+}
 
 public sealed record UsageBudget(
     string Name,
     double Limit,
     double Used,
     double RemainingPercent,
-    DateTimeOffset? ResetsAt);
+    DateTimeOffset? ResetsAt)
+{
+    public bool IsUnlimited { get; init; }
+
+    public string? Currency { get; init; }
+}
 
 public sealed record UsageSnapshot(
     UsageProvider Provider,

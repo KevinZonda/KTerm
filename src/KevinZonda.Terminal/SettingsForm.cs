@@ -19,6 +19,7 @@ internal sealed class SettingsForm : Form
     private readonly ComboBox _themeName = new();
     private readonly Panel _themePreview = new();
     private readonly CheckBox _showRemainingUsage = new();
+    private readonly CheckBox _autoRenewKimiToken = new();
     private readonly TabControl _tabs = new();
     private readonly ComboBox _shellProfile = new();
     private readonly TextBox _shellExecutable = new();
@@ -67,7 +68,8 @@ internal sealed class SettingsForm : Form
         },
         Indicators = new IndicatorSettings
         {
-            ShowRemainingUsage = _showRemainingUsage.Checked
+            ShowRemainingUsage = _showRemainingUsage.Checked,
+            AutoRenewKimiToken = _autoRenewKimiToken.Checked
         },
         Shell = SelectedShellSettings()
     });
@@ -132,7 +134,7 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(16),
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 4,
             BackColor = SurfaceColor
         };
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -336,6 +338,8 @@ internal sealed class SettingsForm : Form
         };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.Controls.Add(CreateLabel("Color scheme"), 0, 0);
 
@@ -388,6 +392,21 @@ internal sealed class SettingsForm : Form
         description.AutoSize = true;
         description.Margin = new Padding(22, 0, 0, 0);
         layout.Controls.Add(description, 0, 1);
+
+        _autoRenewKimiToken.AutoSize = true;
+        _autoRenewKimiToken.Text = "Auto renew Kimi token";
+        _autoRenewKimiToken.ForeColor = ForeColor;
+        _autoRenewKimiToken.BackColor = SurfaceColor;
+        _autoRenewKimiToken.Margin = new Padding(0, 18, 0, 8);
+        layout.Controls.Add(_autoRenewKimiToken, 0, 2);
+
+        var renewDescription = CreateLabel(
+            "Refresh the Kimi CLI OAuth token in memory only. Credential files are never modified.");
+        renewDescription.ForeColor = Color.FromArgb(170, 179, 192);
+        renewDescription.AutoSize = true;
+        renewDescription.MaximumSize = new Size(430, 0);
+        renewDescription.Margin = new Padding(22, 0, 0, 0);
+        layout.Controls.Add(renewDescription, 0, 3);
 
         page.Controls.Add(layout);
         return page;
@@ -479,6 +498,7 @@ internal sealed class SettingsForm : Form
             }
 
             _showRemainingUsage.Checked = normalized.Indicators.ShowRemainingUsage;
+            _autoRenewKimiToken.Checked = normalized.Indicators.AutoRenewKimiToken;
             ApplyShellValues(normalized.Shell);
         }
         finally

@@ -1,26 +1,29 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.ExceptionServices;
-using System.Runtime.InteropServices;
 using System.Text.Json;
-using KevinZonda.AgentUsageMonitor.Internal;
 
 namespace KevinZonda.AgentUsageMonitor.KimiCode;
 
 public sealed class KimiCodeUsageClient : IUsageClient
 {
-    private static readonly TimeSpan WeeklyWindow = TimeSpan.FromDays(7);
-    private static readonly TimeSpan DefaultRateWindow = TimeSpan.FromHours(5);
     private readonly HttpClient _httpClient;
     private readonly KimiCodeUsageOptions _options;
+    private readonly KimiCodeOAuthClient _oauthClient;
+    private readonly SemaphoreSlim _credentialGate = new(1, 1);
+    private KimiCodeCredential? _runtimeCredential;
+    private string? _runtimeCredentialHome;
 
     public KimiCodeUsageClient(HttpClient httpClient, KimiCodeUsageOptions? options = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options ?? new KimiCodeUsageOptions();
+        _oauthClient = new KimiCodeOAuthClient(_httpClient);
     }
 
     public UsageProvider Provider => UsageProvider.KimiCode;
+
+    public bool AutoRenewToken => _options.AutoRenewToken;
 
     public Task<UsageSnapshot> GetUsageAsync(CancellationToken cancellationToken = default) =>
         GetUsageAsync(_options, cancellationToken);
@@ -53,7 +56,7 @@ public sealed class KimiCodeUsageClient : IUsageClient
             }
         }
 
-        var credential = await KimiCodeCredentialStore.LoadAsync(options, cancellationToken);
+        var credential = await GetCliCredentialAsync(options, cancellationToken);
         if (credential is null || string.IsNullOrWhiteSpace(credential.AccessToken))
         {
             Rethrow(apiFailure);
@@ -62,7 +65,8 @@ public sealed class KimiCodeUsageClient : IUsageClient
                 "Kimi Code credentials were not found. Run Kimi Code login or configure KIMI_CODE_API_KEY.");
         }
 
-        if (credential.ExpiresAt is null || credential.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+        if (!options.AutoRenewToken
+            && (credential.ExpiresAt is null || credential.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1)))
         {
             Rethrow(apiFailure);
             throw new UsageException(
@@ -77,6 +81,69 @@ public sealed class KimiCodeUsageClient : IUsageClient
             true,
             cancellationToken);
     }
+
+    private async Task<KimiCodeCredential?> GetCliCredentialAsync(
+        KimiCodeUsageOptions options,
+        CancellationToken cancellationToken)
+    {
+        await _credentialGate.WaitAsync(cancellationToken);
+        try
+        {
+            var home = KimiCodeCredentialStore.ResolveHome(options);
+            if (_runtimeCredential is null
+                || !string.Equals(_runtimeCredentialHome, home, StringComparison.OrdinalIgnoreCase))
+            {
+                _runtimeCredential = await KimiCodeCredentialStore.LoadAsync(options, cancellationToken);
+                _runtimeCredentialHome = home;
+            }
+
+            if (_runtimeCredential is null || !options.AutoRenewToken || !ShouldRefresh(_runtimeCredential))
+            {
+                return _runtimeCredential;
+            }
+
+            // Kimi Code may have refreshed its credential since this monitor
+            // started. Prefer the newer disk snapshot, but never write either
+            // the disk credential or our in-memory refresh result back.
+            var diskCredential = await KimiCodeCredentialStore.LoadAsync(options, cancellationToken);
+            if (diskCredential is not null && IsNewerCredential(diskCredential, _runtimeCredential))
+            {
+                _runtimeCredential = diskCredential;
+            }
+
+            if (ShouldRefresh(_runtimeCredential))
+            {
+                _runtimeCredential = await _oauthClient.RefreshAsync(
+                    _runtimeCredential,
+                    options,
+                    cancellationToken);
+            }
+
+            return _runtimeCredential;
+        }
+        finally
+        {
+            _credentialGate.Release();
+        }
+    }
+
+    private static bool ShouldRefresh(KimiCodeCredential credential)
+    {
+        if (credential.ExpiresAt is null)
+        {
+            return false;
+        }
+
+        var threshold = TimeSpan.FromSeconds(Math.Max(300, credential.ExpiresIn / 2d));
+        return credential.ExpiresAt.Value - DateTimeOffset.UtcNow < threshold;
+    }
+
+    private static bool IsNewerCredential(
+        KimiCodeCredential candidate,
+        KimiCodeCredential current) =>
+        (!string.Equals(candidate.AccessToken, current.AccessToken, StringComparison.Ordinal)
+            || !string.Equals(candidate.RefreshToken, current.RefreshToken, StringComparison.Ordinal))
+        && (candidate.ExpiresAt ?? DateTimeOffset.MinValue) >= (current.ExpiresAt ?? DateTimeOffset.MinValue);
 
     internal static Uri BuildUsageUri(Uri baseUri)
     {
@@ -121,7 +188,7 @@ public sealed class KimiCodeUsageClient : IUsageClient
 
         if (addCliIdentity)
         {
-            AddCliIdentityHeaders(request, options);
+            KimiCodeRequestHeaders.AddCliIdentity(request, options);
         }
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -140,7 +207,7 @@ public sealed class KimiCodeUsageClient : IUsageClient
 
         try
         {
-            return Parse(data, source, DateTimeOffset.UtcNow);
+            return KimiCodeUsageParser.Parse(data, source, DateTimeOffset.UtcNow);
         }
         catch (UsageException)
         {
@@ -150,91 +217,6 @@ public sealed class KimiCodeUsageClient : IUsageClient
         {
             throw new UsageException(UsageErrorCode.InvalidResponse, "Invalid Kimi Code usage response.", exception);
         }
-    }
-
-    internal static UsageSnapshot Parse(ReadOnlySpan<byte> data, UsageSource source, DateTimeOffset updatedAt)
-    {
-        using var document = JsonDocument.Parse(data.ToArray());
-        var root = document.RootElement;
-        var usage = root.Property("usage")
-            ?? throw new UsageException(UsageErrorCode.InvalidResponse, "Kimi Code response does not contain usage.");
-        var primary = ParseDetail(usage, "7-day usage", WeeklyWindow);
-
-        UsageWindow? secondary = null;
-        var limits = root.Property("limits");
-        if (limits is { ValueKind: JsonValueKind.Array })
-        {
-            var first = limits.Value.EnumerateArray().FirstOrDefault();
-            if (first.ValueKind == JsonValueKind.Object && first.Property("detail") is { } detail)
-            {
-                secondary = ParseDetail(detail, "Rate limit", ParseWindow(first.Property("window")) ?? DefaultRateWindow);
-            }
-        }
-
-        return new UsageSnapshot(
-            UsageProvider.KimiCode,
-            source,
-            primary,
-            secondary,
-            [],
-            null,
-            null,
-            null,
-            null,
-            updatedAt);
-    }
-
-    private static UsageWindow ParseDetail(JsonElement detail, string name, TimeSpan window)
-    {
-        var limit = detail.Double("limit")
-            ?? throw new UsageException(UsageErrorCode.InvalidResponse, $"Kimi Code {name} limit is missing.");
-        if (limit <= 0)
-        {
-            throw new UsageException(UsageErrorCode.InvalidResponse, $"Kimi Code {name} limit must be positive.");
-        }
-
-        var used = detail.Double("used");
-        if (used is null && detail.Double("remaining") is { } remaining && remaining >= 0 && remaining <= limit)
-        {
-            used = limit - remaining;
-        }
-
-        used ??= 0;
-        var reset = detail.String("resetTime", "resetAt", "reset_time", "reset_at");
-        DateTimeOffset? resetsAt = DateTimeOffset.TryParse(reset, out var parsedReset) ? parsedReset : null;
-        return new UsageWindow(name, JsonHelpers.ClampPercent(used.Value / limit * 100), window, resetsAt, used, limit);
-    }
-
-    private static TimeSpan? ParseWindow(JsonElement? value)
-    {
-        if (value is null || value.Value.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        var duration = value.Value.Int64("duration");
-        if (duration is null or <= 0)
-        {
-            return null;
-        }
-
-        return value.Value.String("timeUnit", "time_unit") switch
-        {
-            "TIME_UNIT_MINUTE" => TimeSpan.FromMinutes(duration.Value),
-            "TIME_UNIT_HOUR" => TimeSpan.FromHours(duration.Value),
-            "TIME_UNIT_DAY" => TimeSpan.FromDays(duration.Value),
-            _ => null,
-        };
-    }
-
-    private static void AddCliIdentityHeaders(HttpRequestMessage request, KimiCodeUsageOptions options)
-    {
-        request.Headers.TryAddWithoutValidation("X-Msh-Platform", "kimi_code_cli");
-        request.Headers.TryAddWithoutValidation("X-Msh-Version", "1.0");
-        request.Headers.TryAddWithoutValidation("X-Msh-Device-Id", KimiCodeCredentialStore.ResolveDeviceId(options));
-        request.Headers.TryAddWithoutValidation("X-Msh-Device-Name", Environment.MachineName);
-        request.Headers.TryAddWithoutValidation("X-Msh-Os-Version", Environment.OSVersion.Version.ToString());
-        request.Headers.TryAddWithoutValidation("X-Msh-Device-Model", $"{Environment.OSVersion.Platform} {RuntimeInformation.OSArchitecture}");
     }
 
     private static string? FirstNotEmpty(params string?[] values) =>

@@ -28,11 +28,15 @@ internal sealed record AgentUsageWindowStatus(
 
 internal sealed record AgentUsageCreditsStatus(
     double? Remaining,
-    bool IsUnlimited);
+    bool IsUnlimited,
+    double? Total,
+    string? Currency);
 
 internal sealed record AgentUsageBudgetStatus(
     string Name,
     double Limit,
     double Used,
     double RemainingPercent,
-    DateTimeOffset? ResetsAt);
+    DateTimeOffset? ResetsAt,
+    bool IsUnlimited,
+    string? Currency);

@@ -1,6 +1,7 @@
 using KevinZonda.AgentUsageMonitor;
 using KevinZonda.AgentUsageMonitor.Codex;
 using KevinZonda.AgentUsageMonitor.KimiCode;
+using KevinZonda.Terminal.Configuration;
 using KevinZonda.Terminal.Terminal;
 
 namespace KevinZonda.Terminal.Usage;
@@ -14,7 +15,7 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
     private readonly TerminalSessionManager _sessions;
     private readonly AgentProcessDetector _detector;
     private readonly HttpClient _httpClient;
-    private readonly IReadOnlyDictionary<UsageProvider, IUsageClient> _clients;
+    private volatile IReadOnlyDictionary<UsageProvider, IUsageClient> _clients;
     private readonly Dictionary<UsageProvider, ProviderRuntime> _providers = new()
     {
         [UsageProvider.Codex] = new(),
@@ -26,7 +27,7 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
     private Task? _monitorTask;
     private int _disposed;
 
-    internal AgentUsageStatusService(TerminalSessionManager sessions)
+    internal AgentUsageStatusService(TerminalSessionManager sessions, AppSettings settings)
     {
         _sessions = sessions;
         _detector = new AgentProcessDetector();
@@ -34,14 +35,27 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
         {
             Timeout = TimeSpan.FromSeconds(20)
         };
-        _clients = new Dictionary<UsageProvider, IUsageClient>
-        {
-            [UsageProvider.Codex] = new CodexUsageClient(_httpClient),
-            [UsageProvider.KimiCode] = new KimiCodeUsageClient(_httpClient)
-        };
+        _clients = CreateClients(settings);
     }
 
     internal event Action<AgentUsageStatus>? StatusChanged;
+
+    internal void UpdateSettings(AppSettings settings)
+    {
+        var autoRenew = settings.Indicators.AutoRenewKimiToken;
+        var current = _clients[UsageProvider.KimiCode] as KimiCodeUsageClient;
+        if (current?.AutoRenewToken == autoRenew)
+        {
+            return;
+        }
+
+        _clients = CreateClients(settings);
+        lock (_stateLock)
+        {
+            _providers[UsageProvider.KimiCode].LastAttempt = null;
+        }
+        _ = DetectAndRefresh();
+    }
 
     internal AgentUsageStatus Current
     {
@@ -102,6 +116,18 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
         {
         }
     }
+
+    private IReadOnlyDictionary<UsageProvider, IUsageClient> CreateClients(AppSettings settings) =>
+        new Dictionary<UsageProvider, IUsageClient>
+        {
+            [UsageProvider.Codex] = new CodexUsageClient(_httpClient),
+            [UsageProvider.KimiCode] = new KimiCodeUsageClient(
+                _httpClient,
+                new KimiCodeUsageOptions
+                {
+                    AutoRenewToken = settings.Indicators.AutoRenewKimiToken,
+                })
+        };
 
     private Task DetectAndRefresh()
     {
@@ -253,7 +279,11 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
             snapshot?.Plan,
             windows,
             snapshot?.Credits is { } credits
-                ? new AgentUsageCreditsStatus(credits.Remaining, credits.IsUnlimited)
+                ? new AgentUsageCreditsStatus(
+                    credits.Remaining,
+                    credits.IsUnlimited,
+                    credits.Total,
+                    credits.Currency)
                 : null,
             snapshot?.Budget is { } budget
                 ? new AgentUsageBudgetStatus(
@@ -261,7 +291,9 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
                     budget.Limit,
                     budget.Used,
                     budget.RemainingPercent,
-                    budget.ResetsAt)
+                    budget.ResetsAt,
+                    budget.IsUnlimited,
+                    budget.Currency)
                 : null,
             snapshot?.UpdatedAt,
             runtime.LastAttempt + RefreshInterval,

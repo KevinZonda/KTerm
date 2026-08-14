@@ -1516,18 +1516,34 @@ export class Workspace implements TerminalCallbacks {
           ? 'Unlimited'
           : provider.credits.remaining === undefined
             ? 'Unknown'
-            : `${this.formatUsageAmount(provider.credits.remaining)} remaining`;
+            : provider.credits.total === undefined
+              ? `${this.formatUsageAmount(provider.credits.remaining, provider.credits.currency)} remaining`
+              : `${this.formatUsageAmount(provider.credits.remaining, provider.credits.currency)} / ` +
+                `${this.formatUsageAmount(provider.credits.total, provider.credits.currency)} remaining`;
         credits.append(this.agentUsageText(value, 'agent-usage-tooltip-extra-value'));
         extras.append(credits);
       }
       if (provider.budget) {
-        this.appendUsageMeter(
-          extras,
-          provider.budget.name,
-          'Budget',
-          100 - provider.budget.remainingPercent,
-          provider.budget.resetsAt,
-          this.formatUsageAmountPair(provider.budget.used, provider.budget.limit));
+        if (provider.budget.isUnlimited) {
+          const budget = document.createElement('div');
+          budget.className = 'agent-usage-tooltip-extra';
+          budget.append(this.agentUsageText(provider.budget.name, 'agent-usage-tooltip-extra-name'));
+          budget.append(this.agentUsageText(
+            `${this.formatUsageAmount(provider.budget.used, provider.budget.currency)} used · Unlimited`,
+            'agent-usage-tooltip-extra-value'));
+          extras.append(budget);
+        } else {
+          this.appendUsageMeter(
+            extras,
+            provider.budget.name,
+            'Budget',
+            100 - provider.budget.remainingPercent,
+            provider.budget.resetsAt,
+            this.formatUsageAmountPair(
+              provider.budget.used,
+              provider.budget.limit,
+              provider.budget.currency));
+        }
       }
       content.append(extras);
     }
@@ -1689,7 +1705,18 @@ export class Workspace implements TerminalCallbacks {
     return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
   }
 
-  private formatUsageAmount(value: number): string {
+  private formatUsageAmount(value: number, currency?: string): string {
+    if (currency) {
+      try {
+        return value.toLocaleString(undefined, {
+          style: 'currency',
+          currency,
+          maximumFractionDigits: 2
+        });
+      } catch {
+        return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`;
+      }
+    }
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
@@ -1702,12 +1729,12 @@ export class Workspace implements TerminalCallbacks {
     return `${this.formatUsagePercent(this.displayedUsagePercent(usedPercent))}%${suffix}`;
   }
 
-  private formatUsageAmountPair(used: number, limit: number): string {
+  private formatUsageAmountPair(used: number, limit: number, currency?: string): string {
     if (this.settings.indicators.showRemainingUsage) {
       const remaining = Math.max(0, limit - used);
-      return `${this.formatUsageAmount(remaining)} / ${this.formatUsageAmount(limit)} remaining`;
+      return `${this.formatUsageAmount(remaining, currency)} / ${this.formatUsageAmount(limit, currency)} remaining`;
     }
-    return `${this.formatUsageAmount(used)} / ${this.formatUsageAmount(limit)}`;
+    return `${this.formatUsageAmount(used, currency)} / ${this.formatUsageAmount(limit, currency)}`;
   }
 
   private formatMemory(bytes: number, fractionDigits = 1): string {

@@ -51,6 +51,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Kimi API request and response", TestKimiApiAsync),
     ("Common usage client interface", TestCommonInterfaceAsync),
     ("Kimi auto falls back to CLI credential", TestKimiAutoFallbackAsync),
+    ("Kimi renews CLI token in memory only", TestKimiInMemoryRenewalAsync),
+    ("Kimi parses all limits and booster wallet", TestKimiCompleteUsageAsync),
     ("Kimi endpoint normalization", TestKimiEndpointAsync),
     ("Codex OAuth request and response", TestCodexOAuthAsync),
     ("Codex endpoint normalization", TestCodexEndpointAsync),
@@ -181,6 +183,132 @@ static async Task TestKimiAutoFallbackAsync()
     }
 }
 
+static async Task TestKimiInMemoryRenewalAsync()
+{
+    var temporaryRoot = Path.Combine(
+        Path.GetTempPath(),
+        "kevinzonda-agent-usage-monitor-tests",
+        Guid.NewGuid().ToString("N"));
+    var credentialsDirectory = Path.Combine(temporaryRoot, "credentials");
+    Directory.CreateDirectory(credentialsDirectory);
+    var credentialPath = Path.Combine(credentialsDirectory, "kimi-code.json");
+    var originalCredential = $$"""
+        {
+          "access_token": "expired-access",
+          "refresh_token": "original-refresh",
+          "expires_at": {{DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeSeconds()}},
+          "expires_in": 3600,
+          "scope": "openid",
+          "token_type": "Bearer"
+        }
+        """;
+    await File.WriteAllTextAsync(credentialPath, originalCredential);
+
+    try
+    {
+        var refreshCount = 0;
+        var usageCount = 0;
+        var handler = new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                refreshCount++;
+                Equal("https://auth.kimi.com/api/oauth/token", request.RequestUri!.AbsoluteUri);
+                var form = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                Contains("grant_type=refresh_token", form);
+                Contains("refresh_token=original-refresh", form);
+                return Json("""
+                    {
+                      "access_token": "renewed-access",
+                      "refresh_token": "renewed-refresh",
+                      "expires_in": 3600,
+                      "scope": "openid",
+                      "token_type": "Bearer"
+                    }
+                    """);
+            }
+
+            usageCount++;
+            Equal("Bearer renewed-access", request.Headers.Authorization!.ToString());
+            return Json("""{"usage":{"limit":100,"used":10},"limits":[]}""");
+        });
+        var client = new KimiCodeUsageClient(
+            new HttpClient(handler),
+            new KimiCodeUsageOptions
+            {
+                Mode = KimiCodeUsageMode.CliCredential,
+                KimiCodeHome = temporaryRoot,
+                DeviceId = "test-device",
+                AutoRenewToken = true,
+            });
+
+        await client.GetUsageAsync();
+        await client.GetUsageAsync();
+
+        Equal(1, refreshCount);
+        Equal(2, usageCount);
+        Equal(originalCredential, await File.ReadAllTextAsync(credentialPath));
+    }
+    finally
+    {
+        Directory.Delete(temporaryRoot, recursive: true);
+    }
+}
+
+static async Task TestKimiCompleteUsageAsync()
+{
+    const string json = """
+        {
+          "usage": { "limit": "1000", "used": "250", "resetTime": "2026-08-20T00:00:00Z" },
+          "limits": [
+            {
+              "name": "Burst",
+              "window": { "duration": 300, "timeUnit": "TIME_UNIT_MINUTE" },
+              "detail": { "limit": "100", "used": "20", "resetTime": "2026-08-14T12:00:00Z" }
+            },
+            {
+              "name": "Weekly messages",
+              "window": { "duration": 1, "timeUnit": "TIME_UNIT_WEEK" },
+              "detail": { "limit": "50", "used": "5" }
+            }
+          ],
+          "boosterWallet": {
+            "balance": {
+              "type": "BOOSTER",
+              "amount": "500000000",
+              "amountLeft": "250000000"
+            },
+            "monthlyChargeLimitEnabled": true,
+            "monthlyChargeLimit": { "priceInCents": "1000", "currency": "USD" },
+            "monthlyUsed": { "priceInCents": "250", "currency": "USD" }
+          }
+        }
+        """;
+    var client = new KimiCodeUsageClient(
+        new HttpClient(new StubHandler(_ => Json(json))),
+        new KimiCodeUsageOptions
+        {
+            Mode = KimiCodeUsageMode.ApiKey,
+            ApiKey = "test-kimi",
+        });
+
+    var usage = await client.GetUsageAsync();
+
+    Equal("Burst", usage.Secondary!.Name);
+    Equal(TimeSpan.FromHours(5), usage.Secondary.Window);
+    Equal(1, usage.ExtraWindows.Count);
+    Equal("Weekly messages", usage.ExtraWindows[0].Name);
+    Equal(TimeSpan.FromDays(7), usage.ExtraWindows[0].Window);
+    Equal(2.5d, usage.Credits!.Remaining);
+    Equal(5d, usage.Credits.Total);
+    Equal("USD", usage.Credits.Currency);
+    Equal(10d, usage.Budget!.Limit);
+    Equal(2.5d, usage.Budget.Used);
+    Equal(75d, usage.Budget.RemainingPercent);
+    Equal(false, usage.Budget.IsUnlimited);
+    Equal("USD", usage.Budget.Currency);
+}
+
 static async Task TestCodexOAuthAsync()
 {
     var temporaryRoot = Path.Combine(
@@ -269,6 +397,14 @@ static void Equal<T>(T expected, T actual)
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
     {
         throw new InvalidOperationException($"Expected {expected}, got {actual}.");
+    }
+}
+
+static void Contains(string expected, string actual)
+{
+    if (!actual.Contains(expected, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException($"Expected '{actual}' to contain '{expected}'.");
     }
 }
 

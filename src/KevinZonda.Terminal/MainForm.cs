@@ -37,7 +37,7 @@ internal sealed class MainForm : Form
     {
         _settings = _settingsStore.Load();
         _sessions = new TerminalSessionManager(_settings, startingDirectory);
-        _agentUsage = new AgentUsageStatusService(_sessions);
+        _agentUsage = new AgentUsageStatusService(_sessions, _settings);
         _systemMetrics = new SystemMetricsService();
         Text = "KevinZonda Terminal";
         BackColor = Color.FromArgb(12, 15, 20);
@@ -466,6 +466,7 @@ internal sealed class MainForm : Form
             {
                 _settings = await _settingsStore.SaveAsync(settingsForm.Settings);
                 await _sessions.UpdateSettingsAsync(_settings);
+                _agentUsage.UpdateSettings(_settings);
                 _sessions.Prewarm(80, 24);
                 _bridge?.SendSettingsChanged(_settings);
             }

@@ -24,6 +24,7 @@ export interface ThemeSettings {
 
 export interface IndicatorSettings {
   showRemainingUsage: boolean;
+  autoRenewKimiToken: boolean;
 }
 
 export interface AgentUsageWindow {
@@ -38,6 +39,8 @@ export interface AgentUsageWindow {
 export interface AgentUsageCredits {
   remaining?: number;
   isUnlimited: boolean;
+  total?: number;
+  currency?: string;
 }
 
 export interface AgentUsageBudget {
@@ -46,6 +49,8 @@ export interface AgentUsageBudget {
   used: number;
   remainingPercent: number;
   resetsAt?: string;
+  isUnlimited: boolean;
+  currency?: string;
 }
 
 export interface AgentProviderUsage {
@@ -90,7 +95,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     name: DEFAULT_THEME_NAME
   },
   indicators: {
-    showRemainingUsage: false
+    showRemainingUsage: false,
+    autoRenewKimiToken: false
   }
 };
 
@@ -202,7 +208,10 @@ export class NativeBridge {
     return {
       font: { family, size, lineHeight },
       theme: { name: normalizeTerminalThemeName(theme.name) },
-      indicators: { showRemainingUsage: indicators.showRemainingUsage === true }
+      indicators: {
+        showRemainingUsage: indicators.showRemainingUsage === true,
+        autoRenewKimiToken: indicators.autoRenewKimiToken === true
+      }
     };
   }
 
@@ -272,7 +281,9 @@ export class NativeBridge {
         credits: credits
           ? {
               remaining: this.finiteNumber(credits.remaining),
-              isUnlimited: credits.isUnlimited === true
+              isUnlimited: credits.isUnlimited === true,
+              total: this.finiteNumber(credits.total),
+              currency: typeof credits.currency === 'string' ? credits.currency : undefined
             }
           : undefined,
         budget: budget && typeof budget.name === 'string' &&
@@ -284,7 +295,9 @@ export class NativeBridge {
               limit: this.finiteNumber(budget.limit)!,
               used: this.finiteNumber(budget.used)!,
               remainingPercent: Math.min(100, Math.max(0, this.finiteNumber(budget.remainingPercent)!)),
-              resetsAt: typeof budget.resetsAt === 'string' ? budget.resetsAt : undefined
+              resetsAt: typeof budget.resetsAt === 'string' ? budget.resetsAt : undefined,
+              isUnlimited: budget.isUnlimited === true,
+              currency: typeof budget.currency === 'string' ? budget.currency : undefined
             }
           : undefined,
         updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : undefined,

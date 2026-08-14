@@ -3,7 +3,13 @@ using KevinZonda.AgentUsageMonitor.Internal;
 
 namespace KevinZonda.AgentUsageMonitor.KimiCode;
 
-internal sealed record KimiCodeCredential(string AccessToken, string RefreshToken, DateTimeOffset? ExpiresAt);
+internal sealed record KimiCodeCredential(
+    string AccessToken,
+    string RefreshToken,
+    DateTimeOffset? ExpiresAt,
+    long ExpiresIn,
+    string Scope,
+    string TokenType);
 
 internal static class KimiCodeCredentialStore
 {
@@ -33,7 +39,13 @@ internal static class KimiCodeCredentialStore
         DateTimeOffset? expiresAt = root.Double("expires_at", "expiresAt") is { } seconds && double.IsFinite(seconds)
             ? DateTimeOffset.FromUnixTimeMilliseconds(checked((long)(seconds * 1000)))
             : null;
-        return new KimiCodeCredential(accessToken, refreshToken, expiresAt);
+        return new KimiCodeCredential(
+            accessToken,
+            refreshToken,
+            expiresAt,
+            root.Int64("expires_in", "expiresIn") ?? 0,
+            root.String("scope") ?? string.Empty,
+            root.String("token_type", "tokenType") ?? "Bearer");
     }
 
     public static string ResolveDeviceId(KimiCodeUsageOptions options)

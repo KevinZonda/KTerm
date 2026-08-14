@@ -55,6 +55,10 @@ Both clients default to `Auto` mode. Kimi tries an API key and then the Kimi Cod
 credential and falls back to `codex app-server` only for missing or rejected credentials. Network and malformed-response
 errors are surfaced instead of silently launching another process.
 
+Kimi CLI OAuth renewal is opt-in. Set `AutoRenewToken = true` to refresh an expiring token for the lifetime of the
+`KimiCodeUsageClient` instance. Renewed access and refresh tokens remain in memory only; the CLI credential file and all
+other files are left unchanged.
+
 ## Build and test
 
 ```powershell

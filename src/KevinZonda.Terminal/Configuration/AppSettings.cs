@@ -65,9 +65,12 @@ internal sealed record IndicatorSettings
 {
     public bool ShowRemainingUsage { get; init; }
 
+    public bool AutoRenewKimiToken { get; init; }
+
     internal static IndicatorSettings Normalize(IndicatorSettings? settings) => new()
     {
-        ShowRemainingUsage = settings?.ShowRemainingUsage ?? false
+        ShowRemainingUsage = settings?.ShowRemainingUsage ?? false,
+        AutoRenewKimiToken = settings?.AutoRenewKimiToken ?? false
     };
 }
 
