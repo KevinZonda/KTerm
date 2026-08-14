@@ -1,0 +1,86 @@
+name: Build Windows executable
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build win-x64
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.9
+        with:
+          version: 10.33.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/KevinZonda.Terminal.Web/pnpm-lock.yaml
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install frontend dependencies
+        run: pnpm --dir src/KevinZonda.Terminal.Web install --frozen-lockfile
+
+      - name: Restore .NET dependencies
+        run: >-
+          dotnet restore src/KevinZonda.Terminal/KevinZonda.Terminal.csproj
+          --runtime win-x64
+          --nologo
+
+      - name: Verify C# formatting
+        run: dotnet format KevinZonda.Terminal.slnx --verify-no-changes --no-restore
+
+      - name: Publish executable
+        run: >-
+          dotnet publish src/KevinZonda.Terminal/KevinZonda.Terminal.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained false
+          --no-restore
+          --output artifacts/publish
+          -p:PublishReadyToRun=true
+          -p:PublishSingleFile=true
+          --nologo
+
+      - name: Verify published executable
+        shell: pwsh
+        run: |
+          $executable = 'artifacts/publish/KevinZonda.Terminal.exe'
+          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Published executable was not found at $executable."
+          }
+          Get-Item -LiteralPath $executable |
+            Select-Object FullName, Length, LastWriteTime
+
+      - name: Upload executable
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: KevinZonda-Terminal-win-x64
+          path: artifacts/publish/KevinZonda.Terminal.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

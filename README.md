@@ -58,4 +58,12 @@ powershell -ExecutionPolicy Bypass -File scripts\smoke.ps1
 dotnet publish src\KevinZonda.Terminal\KevinZonda.Terminal.csproj -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true
 ```
 
+## GitHub Actions 构建
+
+推送到 `master`、创建 Pull Request，或在 GitHub Actions 页面手动运行
+`Build Windows executable`，都会在 Windows runner 上构建单文件 win-x64 版本。
+构建成功后，从对应 workflow run 的 **Artifacts** 区下载
+`KevinZonda-Terminal-win-x64`，其中包含 `KevinZonda.Terminal.exe`。
+Artifact 保留 30 天；程序运行时需要 .NET 10 Desktop Runtime 和 WebView2 Runtime。
+
 详细架构、消息协议与验收标准参见 [docs/plan.md](docs/plan.md)。
