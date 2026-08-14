@@ -49,6 +49,7 @@ jobs:
         run: >-
           dotnet restore src/KevinZonda.Terminal/KevinZonda.Terminal.csproj
           --runtime win-x64
+          -p:PublishReadyToRun=true
           --nologo
 
       - name: Verify C# formatting
