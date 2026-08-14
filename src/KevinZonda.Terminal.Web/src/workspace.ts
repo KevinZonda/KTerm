@@ -1096,7 +1096,7 @@ export class Workspace implements TerminalCallbacks {
   private syncWindowTitle(): void {
     const pane = this.focusedPane;
     const title = pane?.tabs.find(tab => tab.sessionId === pane.activeSessionId)?.title.trim();
-    document.title = title ? `${title} — KevinZonda Terminal` : 'KevinZonda Terminal';
+    document.title = title ? `${title} - KevinZonda Terminal` : 'KevinZonda Terminal';
   }
 
   private fitVisibleTerminals(immediate = false): void {
