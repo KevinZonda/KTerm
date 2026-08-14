@@ -172,7 +172,7 @@ internal sealed class AboutForm : Form
     private static Image DefaultFormIcon()
     {
         using var holder = new Form();
-        return holder.Icon.ToBitmap();
+        return (holder.Icon ?? SystemIcons.Application).ToBitmap();
     }
 
     private Font OwnedFont(float size, FontStyle style)
