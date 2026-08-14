@@ -12,6 +12,7 @@
     <Product>KevinZonda Terminal</Product>
     <Version>0.1.0</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\WinFormsDefault.ico</ApplicationIcon>
     <WebProjectDir>$(MSBuildProjectDirectory)\..\KevinZonda.Terminal.Web</WebProjectDir>
   </PropertyGroup>
 
