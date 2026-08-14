@@ -31,8 +31,11 @@ export class TerminalController {
   private readonly host = document.createElement('div');
   private readonly resizeObserver: ResizeObserver;
   private readonly disposables: IDisposable[] = [];
-  // xterm.js cannot answer OSC color queries until open() creates its theme service.
-  private readonly pendingWrites: string[] = [];
+  // Writes go straight to the parser even before open(): query answers (DA,
+  // DSR) must return while the app is still waiting, or they land at the shell
+  // prompt as garbage when the answer finally arrives. xterm.js parses fine
+  // headless; only OSC color reports are skipped pre-open (its theme service
+  // does not exist yet), which apps handle with a timeout fallback.
   private webglAddon?: WebglAddon;
   private webglFailed = false;
   private webglReclaimTimer?: number;
@@ -107,7 +110,6 @@ export class TerminalController {
     if (!this.opened) {
       this.terminal.open(this.host);
       this.opened = true;
-      this.pendingWrites.splice(0).forEach(data => this.terminal.write(data));
       if (!this.fitNow()) {
         this.scheduleFit();
       }
@@ -162,11 +164,6 @@ export class TerminalController {
   }
 
   public write(data: string): void {
-    if (!this.opened) {
-      this.pendingWrites.push(data);
-      return;
-    }
-
     this.terminal.write(data);
   }
 
@@ -244,7 +241,6 @@ export class TerminalController {
       window.clearTimeout(this.fitTimer);
     }
     this.cancelWebglReclaim();
-    this.pendingWrites.length = 0;
     this.host.removeEventListener('wheel', this.handleWheel, { capture: true });
     this.resizeObserver.disconnect();
     this.disposables.forEach(disposable => disposable.dispose());
