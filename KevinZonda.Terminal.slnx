@@ -1,3 +1,5 @@
 <Solution>
+  <Project Path="src/KevinZonda.AgentUsageMonitor/KevinZonda.AgentUsageMonitor.csproj" />
   <Project Path="src/KevinZonda.Terminal/KevinZonda.Terminal.csproj" />
+  <Project Path="tests/KevinZonda.AgentUsageMonitor.Tests/KevinZonda.AgentUsageMonitor.Tests.csproj" />
 </Solution>
