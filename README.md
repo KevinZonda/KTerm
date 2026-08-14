@@ -63,7 +63,9 @@ dotnet publish src\KevinZonda.Terminal\KevinZonda.Terminal.csproj -c Release -r 
 推送到 `master`、创建 Pull Request，或在 GitHub Actions 页面手动运行
 `Build Windows executable`，都会在 Windows runner 上构建单文件 win-x64 版本。
 构建成功后，从对应 workflow run 的 **Artifacts** 区下载
-`KevinZonda-Terminal-win-x64`，其中包含 `KevinZonda.Terminal.exe`。
+`KevinZonda-Terminal-win-x64-YYYYMMDD-HHmmssZ-<short-hash>.zip`，其中包含
+`KevinZonda.Terminal.exe`。文件名中的时间戳使用 UTC，hash 为触发构建的 commit
+SHA 前 7 位。
 Artifact 保留 30 天；程序运行时需要 .NET 10 Desktop Runtime 和 WebView2 Runtime。
 
 详细架构、消息协议与验收标准参见 [docs/plan.md](docs/plan.md)。

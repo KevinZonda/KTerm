@@ -77,11 +77,26 @@ jobs:
           Get-Item -LiteralPath $executable |
             Select-Object FullName, Length, LastWriteTime
 
-      - name: Upload executable
+      - name: Package executable
+        id: package
+        shell: pwsh
+        run: |
+          $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssZ')
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $archiveName = "KevinZonda-Terminal-win-x64-$timestamp-$shortSha.zip"
+          $archivePath = "artifacts/$archiveName"
+          Compress-Archive `
+            -LiteralPath 'artifacts/publish/KevinZonda.Terminal.exe' `
+            -DestinationPath $archivePath `
+            -CompressionLevel Optimal
+          "archive-path=$archivePath" >> $env:GITHUB_OUTPUT
+          Get-Item -LiteralPath $archivePath |
+            Select-Object FullName, Length, LastWriteTime
+
+      - name: Upload executable archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: KevinZonda-Terminal-win-x64
-          path: artifacts/publish/KevinZonda.Terminal.exe
+          path: ${{ steps.package.outputs.archive-path }}
+          archive: false
           if-no-files-found: error
           retention-days: 30
-          compression-level: 0
