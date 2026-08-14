@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using KevinZonda.Terminal.Configuration;
 using KevinZonda.Terminal.Terminal;
+using KevinZonda.Terminal.Usage;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -16,6 +17,7 @@ internal sealed class WebViewBridge : IDisposable
 
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
+    private readonly AgentUsageStatusService _agentUsage;
     private readonly Action _openSettings;
     private readonly Action<string> _openExternal;
     private readonly Func<double, Task<AppSettings>> _saveFontSize;
@@ -27,6 +29,7 @@ internal sealed class WebViewBridge : IDisposable
     internal WebViewBridge(
         WebView2 webView,
         TerminalSessionManager sessions,
+        AgentUsageStatusService agentUsage,
         Action openSettings,
         Action<string> openExternal,
         Func<double, Task<AppSettings>> saveFontSize,
@@ -34,12 +37,14 @@ internal sealed class WebViewBridge : IDisposable
     {
         _webView = webView;
         _sessions = sessions;
+        _agentUsage = agentUsage;
         _openSettings = openSettings;
         _openExternal = openExternal;
         _saveFontSize = saveFontSize;
         _settings = settings;
         _sessions.OutputReceived += QueueOutput;
         _sessions.SessionExited += QueueExit;
+        _agentUsage.StatusChanged += QueueAgentUsage;
         _webView.CoreWebView2.WebMessageReceived += HandleMessage;
 
         _outputTimer = new System.Windows.Forms.Timer
@@ -81,7 +86,8 @@ internal sealed class WebViewBridge : IDisposable
                     {
                         application = "KevinZonda Terminal",
                         version = Application.ProductVersion,
-                        settings = _settings
+                        settings = _settings,
+                        agentUsage = _agentUsage.Current
                     });
                     break;
 
@@ -187,6 +193,22 @@ internal sealed class WebViewBridge : IDisposable
         try
         {
             _webView.BeginInvoke(() => Post("session.exited", sessionId: sessionId, payload: new { exitCode }));
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private void QueueAgentUsage(AgentUsageStatus status)
+    {
+        if (Volatile.Read(ref _disposed) != 0 || _webView.IsDisposed)
+        {
+            return;
+        }
+
+        try
+        {
+            _webView.BeginInvoke(() => Post("agentUsage.changed", payload: new { agentUsage = status }));
         }
         catch (InvalidOperationException)
         {
@@ -300,6 +322,7 @@ internal sealed class WebViewBridge : IDisposable
         _outputTimer.Dispose();
         _sessions.OutputReceived -= QueueOutput;
         _sessions.SessionExited -= QueueExit;
+        _agentUsage.StatusChanged -= QueueAgentUsage;
 
         if (_webView.CoreWebView2 is not null)
         {

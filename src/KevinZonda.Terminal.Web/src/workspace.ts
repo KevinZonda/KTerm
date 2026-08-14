@@ -1,5 +1,12 @@
 import { DEFAULT_SETTINGS } from './bridge';
-import type { AppSettings, BridgeEvent, NativeBridge, SessionCreated } from './bridge';
+import type {
+  AgentProviderUsage,
+  AgentUsageStatus,
+  AppSettings,
+  BridgeEvent,
+  NativeBridge,
+  SessionCreated
+} from './bridge';
 import { TerminalController } from './terminal-controller';
 import type { TerminalCallbacks } from './terminal-controller';
 import { applyTerminalThemeToDocument } from './themes';
@@ -51,6 +58,7 @@ export class Workspace implements TerminalCallbacks {
   private readonly bridge: NativeBridge;
   private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
+  private readonly agentStatusBar: HTMLElement;
   private readonly peekRail: HTMLElement;
   private readonly peekList: HTMLElement;
   private readonly sidebar: HTMLElement;
@@ -76,6 +84,7 @@ export class Workspace implements TerminalCallbacks {
     this.bridge = bridge;
     this.app = this.requireElement('app');
     this.workspace = this.requireElement('workspace');
+    this.agentStatusBar = this.requireElement('agent-status-bar');
     this.peekRail = this.requireElement('workspace-peek');
     this.peekList = this.requireElement('workspace-peek-list');
     this.sidebar = this.requireElement('workspace-sidebar');
@@ -91,6 +100,9 @@ export class Workspace implements TerminalCallbacks {
     this.bridge.on('session.exited', event => this.handleExit(event));
     this.bridge.on('workspace.command', event => this.executeCommand(this.payloadString(event, 'command')));
     this.bridge.on('app.settingsChanged', event => this.applySettings(this.bridge.settingsFrom(event)));
+    this.bridge.on('agentUsage.changed', event => {
+      this.renderAgentUsage(this.bridge.agentUsageFrom(event));
+    });
     this.bridge.on('app.runtimeFailed', event => {
       this.setStatus(`WebView2 process failed: ${this.payloadString(event, 'kind')}`, true);
     });
@@ -102,7 +114,9 @@ export class Workspace implements TerminalCallbacks {
 
   public async initialize(): Promise<void> {
     this.setStatus('Starting KevinZonda Terminal…');
-    this.applySettings(await this.bridge.ready());
+    const initialState = await this.bridge.ready();
+    this.applySettings(initialState.settings);
+    this.renderAgentUsage(initialState.agentUsage);
     await this.createWorkspace();
     this.setStatus('');
   }
@@ -1227,6 +1241,77 @@ export class Workspace implements TerminalCallbacks {
     this.status.textContent = message;
     this.status.classList.toggle('visible', Boolean(message));
     this.status.classList.toggle('error', error);
+  }
+
+  private renderAgentUsage(status: AgentUsageStatus): void {
+    if (status.providers.length === 0) {
+      const idle = document.createElement('span');
+      idle.className = 'agent-status-idle';
+      idle.textContent = 'Ready';
+      this.agentStatusBar.replaceChildren(idle);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const provider of status.providers) {
+      fragment.append(this.renderAgentProviderUsage(provider));
+    }
+    this.agentStatusBar.replaceChildren(fragment);
+  }
+
+  private renderAgentProviderUsage(provider: AgentProviderUsage): HTMLElement {
+    const item = document.createElement('div');
+    item.className = `agent-usage agent-usage-${provider.state}`;
+
+    const name = document.createElement('span');
+    name.className = 'agent-usage-name';
+    name.textContent = provider.provider === 'codex' ? 'Codex' : 'Kimi';
+    item.append(name);
+
+    if (provider.state === 'loading') {
+      item.append(this.agentUsageText('Loading usage…', 'agent-usage-message'));
+    } else if (provider.windows.length === 0) {
+      item.append(this.agentUsageText('Usage unavailable', 'agent-usage-message'));
+    } else {
+      for (const window of provider.windows) {
+        const value = Math.round(window.usedPercent);
+        const usage = this.agentUsageText(`${window.label} ${value}%`, 'agent-usage-window');
+        usage.classList.add(value >= 90 ? 'critical' : value >= 70 ? 'warning' : 'normal');
+        if (window.resetsAt) {
+          const reset = new Date(window.resetsAt);
+          if (!Number.isNaN(reset.getTime())) {
+            usage.title = `Used ${value}%; resets ${reset.toLocaleString()}`;
+          }
+        }
+        item.append(usage);
+      }
+    }
+
+    if (provider.state === 'stale') {
+      item.append(this.agentUsageText('stale', 'agent-usage-stale-label'));
+    }
+
+    const details: string[] = [];
+    if (provider.updatedAt) {
+      const updated = new Date(provider.updatedAt);
+      if (!Number.isNaN(updated.getTime())) {
+        details.push(`Updated ${updated.toLocaleString()}`);
+      }
+    }
+    if (provider.error) {
+      details.push(provider.error);
+    }
+    if (details.length > 0) {
+      item.title = details.join('\n');
+    }
+    return item;
+  }
+
+  private agentUsageText(text: string, className: string): HTMLSpanElement {
+    const element = document.createElement('span');
+    element.className = className;
+    element.textContent = text;
+    return element;
   }
 
   private payloadString(event: BridgeEvent, name: string): string {

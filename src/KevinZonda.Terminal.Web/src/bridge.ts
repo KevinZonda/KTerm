@@ -21,6 +21,29 @@ export interface ThemeSettings {
   name: string;
 }
 
+export interface AgentUsageWindow {
+  label: string;
+  usedPercent: number;
+  resetsAt?: string;
+}
+
+export interface AgentProviderUsage {
+  provider: 'codex' | 'kimi';
+  state: 'loading' | 'ready' | 'stale' | 'error';
+  windows: AgentUsageWindow[];
+  updatedAt?: string;
+  error?: string;
+}
+
+export interface AgentUsageStatus {
+  providers: AgentProviderUsage[];
+}
+
+export interface AppInitialState {
+  settings: AppSettings;
+  agentUsage: AgentUsageStatus;
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   font: {
     family: 'Cascadia Mono, Cascadia Code, Consolas, Yu Gothic UI, monospace',
@@ -55,9 +78,12 @@ export class NativeBridge {
     window.chrome.webview.addEventListener('message', this.handleMessage);
   }
 
-  public async ready(): Promise<AppSettings> {
+  public async ready(): Promise<AppInitialState> {
     const event = await this.request('app.ready', {});
-    return this.settingsFrom(event);
+    return {
+      settings: this.settingsFrom(event),
+      agentUsage: this.agentUsageFrom(event)
+    };
   }
 
   public async createSession(cols = 80, rows = 24): Promise<SessionCreated> {
@@ -129,6 +155,61 @@ export class NativeBridge {
       font: { family, size, lineHeight },
       theme: { name: normalizeTerminalThemeName(theme.name) }
     };
+  }
+
+  public agentUsageFrom(event: BridgeEvent): AgentUsageStatus {
+    const value = event.payload.agentUsage;
+    if (typeof value !== 'object' || value === null) {
+      return { providers: [] };
+    }
+
+    const rawProviders = (value as { providers?: unknown }).providers;
+    if (!Array.isArray(rawProviders)) {
+      return { providers: [] };
+    }
+
+    const providers: AgentProviderUsage[] = [];
+    for (const rawProvider of rawProviders) {
+      if (typeof rawProvider !== 'object' || rawProvider === null) {
+        continue;
+      }
+
+      const candidate = rawProvider as Record<string, unknown>;
+      if ((candidate.provider !== 'codex' && candidate.provider !== 'kimi') ||
+          (candidate.state !== 'loading' && candidate.state !== 'ready' &&
+           candidate.state !== 'stale' && candidate.state !== 'error')) {
+        continue;
+      }
+
+      const windows: AgentUsageWindow[] = [];
+      if (Array.isArray(candidate.windows)) {
+        for (const rawWindow of candidate.windows) {
+          if (typeof rawWindow !== 'object' || rawWindow === null) {
+            continue;
+          }
+          const window = rawWindow as Record<string, unknown>;
+          if (typeof window.label !== 'string' || typeof window.usedPercent !== 'number' ||
+              !Number.isFinite(window.usedPercent)) {
+            continue;
+          }
+          windows.push({
+            label: window.label,
+            usedPercent: Math.min(100, Math.max(0, window.usedPercent)),
+            resetsAt: typeof window.resetsAt === 'string' ? window.resetsAt : undefined
+          });
+        }
+      }
+
+      providers.push({
+        provider: candidate.provider,
+        state: candidate.state,
+        windows,
+        updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : undefined,
+        error: typeof candidate.error === 'string' ? candidate.error : undefined
+      });
+    }
+
+    return { providers };
   }
 
   public writeClipboard(text: string): void {

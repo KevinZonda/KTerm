@@ -29,7 +29,7 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: 0 minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 25px;
   background: #272d37;
 }
 
@@ -40,7 +40,7 @@ button {
 #workspace-sidebar {
   position: absolute;
   z-index: 10;
-  inset: 0 auto 0 0;
+  inset: 0 auto 25px 0;
   display: grid;
   width: 220px;
   min-width: 0;
@@ -73,7 +73,7 @@ button {
 #workspace-peek {
   position: absolute;
   z-index: 15;
-  inset: 0 auto 0 0;
+  inset: 0 auto 25px 0;
   display: grid;
   width: 40px;
   background: var(--chrome-bg-translucent, #171b22ed);
@@ -295,6 +295,70 @@ button {
   background: var(--terminal-background);
 }
 
+#agent-status-bar {
+  z-index: 20;
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 25px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 0 9px;
+  overflow: hidden;
+  color: var(--chrome-text-dim, #aab3c0);
+  background: var(--chrome-bg, #171b22);
+  border-top: 1px solid var(--chrome-border, #303845);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.agent-status-idle {
+  opacity: 0.55;
+}
+
+.agent-usage {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.agent-usage + .agent-usage {
+  padding-left: 14px;
+  border-left: 1px solid var(--chrome-border, #303845);
+}
+
+.agent-usage-name {
+  color: var(--chrome-text-bright, #eef2f6);
+  font-weight: 600;
+}
+
+.agent-usage-window,
+.agent-usage-message,
+.agent-usage-stale-label {
+  color: var(--chrome-text-dim, #aab3c0);
+}
+
+.agent-usage-window.warning {
+  color: #ebcb8b;
+}
+
+.agent-usage-window.critical,
+.agent-usage-error .agent-usage-message {
+  color: #ff9da5;
+}
+
+.agent-usage-stale .agent-usage-window,
+.agent-usage-stale-label {
+  opacity: 0.72;
+}
+
+.agent-usage-stale-label {
+  font-style: italic;
+}
+
 .pane {
   position: relative;
   z-index: 0;
@@ -488,7 +552,7 @@ button {
   position: fixed;
   z-index: 20;
   right: 12px;
-  bottom: 12px;
+  bottom: 37px;
   max-width: min(520px, calc(100vw - 24px));
   padding: 8px 11px;
   border: 1px solid var(--chrome-border, #303845);

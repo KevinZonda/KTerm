@@ -13,6 +13,7 @@ KevinZonda Terminal 是一个面向 Windows 的最小化 Terminal Emulator MVP�
 - codex 等 inline TUI 的历史通过 DECSTBM region scroll 进入终端 scrollback，滚轮可直接查看（依赖 passthrough ConPTY）。
 - vim、less 等 alternate screen 应用中，滚轮自动转为方向键（alternate scroll）。
 - 新 Tab / 分屏按当前 Pane 尺寸创建 ConPTY，减少全屏 TUI 的二次重绘。
+- 底部状态栏会在终端会话中运行 Codex 或 Kimi Code 时显示用量，并每 5 分钟刷新。
 - 关闭 Pane、Tab 或应用时回收相应 Shell、ConPTY 和 Win32 handle。
 
 ## 快捷键

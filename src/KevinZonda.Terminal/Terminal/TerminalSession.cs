@@ -13,6 +13,7 @@ internal sealed class TerminalSession : IAsyncDisposable
     private readonly FileStream _input;
     private readonly FileStream _output;
     private readonly IConHost _conHost;
+    private readonly ProcessJob _processJob;
     private readonly SafeKernelHandle _process;
     private readonly TerminalThemePreset _theme;
     private readonly CancellationTokenSource _lifetime = new();
@@ -33,6 +34,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         FileStream input,
         FileStream output,
         IConHost conHost,
+        ProcessJob processJob,
         SafeKernelHandle process,
         TerminalThemePreset theme,
         int columns,
@@ -44,6 +46,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         _input = input;
         _output = output;
         _conHost = conHost;
+        _processJob = processJob;
         _process = process;
         _theme = theme;
         _columns = columns;
@@ -55,6 +58,8 @@ internal sealed class TerminalSession : IAsyncDisposable
     internal string ShellName { get; }
 
     internal uint ProcessId { get; }
+
+    internal IReadOnlyList<uint> GetProcessIds() => _processJob.GetProcessIds();
 
     internal event Action<TerminalSession, string>? OutputReceived;
 
@@ -96,11 +101,13 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
 
         IConHost? conHost = null;
+        ProcessJob? processJob = null;
         SafeKernelHandle? process = null;
         FileStream? inputStream = null;
         FileStream? outputStream = null;
         IntPtr attributeList = IntPtr.Zero;
         IntPtr environmentBlock = IntPtr.Zero;
+        IntPtr threadHandle = IntPtr.Zero;
 
         try
         {
@@ -156,7 +163,9 @@ internal sealed class TerminalSession : IAsyncDisposable
                 IntPtr.Zero,
                 IntPtr.Zero,
                 false,
-                NativeMethods.ExtendedStartupInfoPresent | NativeMethods.CreateUnicodeEnvironment,
+                NativeMethods.ExtendedStartupInfoPresent |
+                    NativeMethods.CreateUnicodeEnvironment |
+                    NativeMethods.CreateSuspended,
                 environmentBlock,
                 startingDirectory,
                 ref startupInfo,
@@ -167,8 +176,16 @@ internal sealed class TerminalSession : IAsyncDisposable
                 throw NativeMethods.LastError($"Unable to start shell '{shell.ExecutablePath}'.");
             }
 
-            _ = NativeMethods.CloseHandle(processInformation.hThread);
+            threadHandle = processInformation.hThread;
             process = new SafeKernelHandle(processInformation.hProcess);
+            processJob = ProcessJob.Create();
+            processJob.Assign(process);
+            if (NativeMethods.ResumeThread(threadHandle) == uint.MaxValue)
+            {
+                throw NativeMethods.LastError("Unable to resume the terminal shell process.");
+            }
+            _ = NativeMethods.CloseHandle(threadHandle);
+            threadHandle = IntPtr.Zero;
             inputStream = new FileStream(hostInput, FileAccess.Write, BufferSize, isAsync: false);
             outputStream = new FileStream(hostOutput, FileAccess.Read, BufferSize, isAsync: false);
 
@@ -179,6 +196,7 @@ internal sealed class TerminalSession : IAsyncDisposable
                 inputStream,
                 outputStream,
                 conHost,
+                processJob,
                 process,
                 theme,
                 columns,
@@ -186,9 +204,14 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
         catch
         {
+            if (threadHandle != IntPtr.Zero && process is not null)
+            {
+                _ = NativeMethods.TerminateProcess(process.DangerousGetHandle(), 1);
+            }
             inputStream?.Dispose();
             outputStream?.Dispose();
             process?.Dispose();
+            processJob?.Dispose();
             conHost?.Dispose();
             hostInput.Dispose();
             hostOutput.Dispose();
@@ -198,6 +221,10 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
         finally
         {
+            if (threadHandle != IntPtr.Zero)
+            {
+                _ = NativeMethods.CloseHandle(threadHandle);
+            }
             if (attributeList != IntPtr.Zero)
             {
                 NativeMethods.DeleteProcThreadAttributeList(attributeList);
@@ -408,6 +435,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
 
         _process.Dispose();
+        _processJob.Dispose();
         _inputLock.Dispose();
         _lifetime.Dispose();
     }
