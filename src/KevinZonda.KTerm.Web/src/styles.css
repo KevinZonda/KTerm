@@ -341,7 +341,7 @@ button {
 
 .pane-tab.tab-drop-before,
 .pane-new-tab.tab-drop-before {
-  box-shadow: inset 3px 0 #88c0d0;
+  box-shadow: -2px 0 0 var(--chrome-accent, #88c0d0);
 }
 
 .pane-tab.active {
