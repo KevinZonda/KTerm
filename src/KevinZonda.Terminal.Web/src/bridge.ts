@@ -87,7 +87,7 @@ export interface AppInitialState {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   font: {
-    family: 'Cascadia Mono, Cascadia Code, Consolas, Yu Gothic UI, monospace',
+    family: 'Cascadia Mono, Cascadia Code, Consolas, Microsoft YaHei, monospace',
     size: 14,
     lineHeight: 1.12
   },
