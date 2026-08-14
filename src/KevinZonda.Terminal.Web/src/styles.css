@@ -326,6 +326,13 @@ button {
   align-items: center;
   gap: 7px;
   transform: translateY(-1px);
+  border-radius: 3px;
+  outline: none;
+  cursor: default;
+}
+
+.agent-usage:focus-visible {
+  box-shadow: 0 0 0 1px var(--chrome-text-dim, #aab3c0);
 }
 
 .agent-usage + .agent-usage {
@@ -360,6 +367,213 @@ button {
 
 .agent-usage-stale-label {
   font-style: italic;
+}
+
+.agent-usage-tooltip {
+  --agent-usage-arrow-left: 50%;
+  position: fixed;
+  z-index: 100;
+  width: min(340px, calc(100vw - 16px));
+  overflow: visible;
+  color: var(--chrome-text, #d8dee9);
+  background: var(--chrome-bg, #171b22);
+  border: 1px solid var(--chrome-border, #303845);
+  border-radius: 7px;
+  box-shadow: 0 10px 28px #0009;
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.agent-usage-tooltip-content {
+  max-height: calc(100vh - 50px);
+  padding: 13px 14px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: inherit;
+  scrollbar-width: none;
+}
+
+.agent-usage-tooltip-content::-webkit-scrollbar {
+  display: none;
+}
+
+.agent-usage-tooltip::before,
+.agent-usage-tooltip::after {
+  position: absolute;
+  left: var(--agent-usage-arrow-left);
+  width: 0;
+  height: 0;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.agent-usage-tooltip::before {
+  bottom: -7px;
+  border-top: 7px solid var(--chrome-border, #303845);
+  border-right: 7px solid transparent;
+  border-left: 7px solid transparent;
+}
+
+.agent-usage-tooltip::after {
+  bottom: -6px;
+  border-top: 7px solid var(--chrome-bg, #171b22);
+  border-right: 7px solid transparent;
+  border-left: 7px solid transparent;
+}
+
+.agent-usage-tooltip-header,
+.agent-usage-tooltip-meter-heading,
+.agent-usage-tooltip-extra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-usage-tooltip-heading {
+  color: var(--chrome-text-bright, #eef2f6);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.agent-usage-tooltip-badges,
+.agent-usage-tooltip-meter-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-usage-tooltip-badge,
+.agent-usage-tooltip-meter-label {
+  padding: 1px 6px;
+  color: var(--chrome-text-dim, #aab3c0);
+  background: color-mix(in srgb, var(--chrome-border, #303845) 65%, transparent);
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.agent-usage-tooltip-badge.refreshing {
+  color: #88c0d0;
+}
+
+.agent-usage-tooltip-badge.stale {
+  color: #ebcb8b;
+}
+
+.agent-usage-tooltip-badge.error {
+  color: #ff9da5;
+}
+
+.agent-usage-tooltip-source,
+.agent-usage-tooltip-empty,
+.agent-usage-tooltip-meter-details,
+.agent-usage-tooltip-timing {
+  color: var(--chrome-text-dim, #aab3c0);
+}
+
+.agent-usage-tooltip-source {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.agent-usage-tooltip-empty {
+  padding: 18px 0 12px;
+  text-align: center;
+}
+
+.agent-usage-tooltip-meters,
+.agent-usage-tooltip-extras {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.agent-usage-tooltip-extras {
+  padding-top: 11px;
+  border-top: 1px solid var(--chrome-border, #303845);
+}
+
+.agent-usage-tooltip-meter {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-usage-tooltip-meter-name,
+.agent-usage-tooltip-extra-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--chrome-text-bright, #eef2f6);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-usage-tooltip-percent,
+.agent-usage-tooltip-extra-value {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-usage-tooltip-percent.warning {
+  color: #ebcb8b;
+}
+
+.agent-usage-tooltip-percent.critical {
+  color: #ff9da5;
+}
+
+.agent-usage-tooltip-track {
+  height: 5px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--chrome-border, #303845) 72%, transparent);
+  border-radius: 999px;
+}
+
+.agent-usage-tooltip-fill {
+  height: 100%;
+  background: #88c0d0;
+  border-radius: inherit;
+}
+
+.agent-usage-tooltip-fill.warning {
+  background: #ebcb8b;
+}
+
+.agent-usage-tooltip-fill.critical {
+  background: #ff9da5;
+}
+
+.agent-usage-tooltip-meter-details {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+}
+
+.agent-usage-tooltip-reset {
+  margin-left: auto;
+  text-align: right;
+}
+
+.agent-usage-tooltip-error {
+  margin-top: 11px;
+  padding: 7px 8px;
+  color: #ffb2b8;
+  background: #ff5f7017;
+  border: 1px solid #ff718033;
+  border-radius: 4px;
+}
+
+.agent-usage-tooltip-timing {
+  display: grid;
+  gap: 2px;
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid var(--chrome-border, #303845);
+  font-size: 10px;
 }
 
 .pane {

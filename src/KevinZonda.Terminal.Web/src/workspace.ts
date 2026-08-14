@@ -54,11 +54,14 @@ export class Workspace implements TerminalCallbacks {
   private static readonly MAX_WORKSPACE_NAME_LENGTH = 64;
   private static readonly PEEK_OPEN_DELAY = 100;
   private static readonly PEEK_CLOSE_DELAY = 250;
+  private static readonly USAGE_TOOLTIP_OPEN_DELAY = 160;
+  private static readonly USAGE_TOOLTIP_CLOSE_DELAY = 180;
 
   private readonly bridge: NativeBridge;
   private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
   private readonly agentStatusBar: HTMLElement;
+  private readonly agentUsageTooltip: HTMLElement;
   private readonly peekRail: HTMLElement;
   private readonly peekList: HTMLElement;
   private readonly sidebar: HTMLElement;
@@ -78,6 +81,9 @@ export class Workspace implements TerminalCallbacks {
   private fontSaveTimer?: number;
   private peekOpenTimer?: number;
   private peekCloseTimer?: number;
+  private usageTooltipOpenTimer?: number;
+  private usageTooltipCloseTimer?: number;
+  private activeUsageAnchor?: HTMLElement;
   private tabDrag?: TabDragState;
 
   public constructor(bridge: NativeBridge) {
@@ -85,6 +91,12 @@ export class Workspace implements TerminalCallbacks {
     this.app = this.requireElement('app');
     this.workspace = this.requireElement('workspace');
     this.agentStatusBar = this.requireElement('agent-status-bar');
+    this.agentUsageTooltip = document.createElement('div');
+    this.agentUsageTooltip.id = 'agent-usage-tooltip';
+    this.agentUsageTooltip.className = 'agent-usage-tooltip';
+    this.agentUsageTooltip.role = 'tooltip';
+    this.agentUsageTooltip.hidden = true;
+    this.app.append(this.agentUsageTooltip);
     this.peekRail = this.requireElement('workspace-peek');
     this.peekList = this.requireElement('workspace-peek-list');
     this.sidebar = this.requireElement('workspace-sidebar');
@@ -95,6 +107,8 @@ export class Workspace implements TerminalCallbacks {
     this.peekRail.addEventListener('pointerleave', () => this.schedulePeekClose());
     this.peekRail.addEventListener('click', this.handlePeekBackgroundClick);
     this.sidebar.addEventListener('click', this.handleSidebarBackgroundClick);
+    this.agentUsageTooltip.addEventListener('pointerenter', () => this.cancelUsageTooltipClose());
+    this.agentUsageTooltip.addEventListener('pointerleave', () => this.scheduleUsageTooltipClose());
 
     this.bridge.on('session.output', event => this.handleOutput(event));
     this.bridge.on('session.exited', event => this.handleExit(event));
@@ -110,6 +124,7 @@ export class Workspace implements TerminalCallbacks {
     window.addEventListener('keydown', this.handleKeyboard, { capture: true });
     window.addEventListener('pointermove', this.handleEdgePointerMove, { passive: true });
     window.addEventListener('blur', this.handleWindowBlur);
+    window.addEventListener('resize', () => this.hideAgentUsageTooltip());
   }
 
   public async initialize(): Promise<void> {
@@ -215,6 +230,13 @@ export class Workspace implements TerminalCallbacks {
 
   private readonly handleKeyboard = (event: KeyboardEvent): void => {
     if (event.repeat) {
+      return;
+    }
+
+    if (event.key === 'Escape' && this.activeUsageAnchor === document.activeElement) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.hideAgentUsageTooltip();
       return;
     }
 
@@ -577,6 +599,7 @@ export class Workspace implements TerminalCallbacks {
 
   private readonly handleWindowBlur = (): void => {
     this.cancelPeekOpen();
+    this.hideAgentUsageTooltip();
     if (this.sidebarMode === 'peek') {
       this.setSidebarMode('hidden');
     }
@@ -1244,6 +1267,7 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private renderAgentUsage(status: AgentUsageStatus): void {
+    this.hideAgentUsageTooltip();
     if (status.providers.length === 0) {
       const idle = document.createElement('span');
       idle.className = 'agent-status-idle';
@@ -1262,6 +1286,13 @@ export class Workspace implements TerminalCallbacks {
   private renderAgentProviderUsage(provider: AgentProviderUsage): HTMLElement {
     const item = document.createElement('div');
     item.className = `agent-usage agent-usage-${provider.state}`;
+    item.tabIndex = 0;
+    item.setAttribute('aria-label', `${provider.provider === 'codex' ? 'Codex' : 'Kimi'} usage details`);
+    item.setAttribute('aria-describedby', this.agentUsageTooltip.id);
+    item.addEventListener('pointerenter', () => this.scheduleUsageTooltipOpen(item, provider));
+    item.addEventListener('pointerleave', () => this.scheduleUsageTooltipClose());
+    item.addEventListener('focus', () => this.showAgentUsageTooltip(item, provider));
+    item.addEventListener('blur', () => this.scheduleUsageTooltipClose());
 
     const name = document.createElement('span');
     name.className = 'agent-usage-name';
@@ -1277,12 +1308,6 @@ export class Workspace implements TerminalCallbacks {
         const value = Math.round(window.usedPercent);
         const usage = this.agentUsageText(`${window.label} ${value}%`, 'agent-usage-window');
         usage.classList.add(value >= 90 ? 'critical' : value >= 70 ? 'warning' : 'normal');
-        if (window.resetsAt) {
-          const reset = new Date(window.resetsAt);
-          if (!Number.isNaN(reset.getTime())) {
-            usage.title = `Used ${value}%; resets ${reset.toLocaleString()}`;
-          }
-        }
         item.append(usage);
       }
     }
@@ -1291,20 +1316,298 @@ export class Workspace implements TerminalCallbacks {
       item.append(this.agentUsageText('stale', 'agent-usage-stale-label'));
     }
 
-    const details: string[] = [];
-    if (provider.updatedAt) {
-      const updated = new Date(provider.updatedAt);
-      if (!Number.isNaN(updated.getTime())) {
-        details.push(`Updated ${updated.toLocaleString()}`);
-      }
-    }
-    if (provider.error) {
-      details.push(provider.error);
-    }
-    if (details.length > 0) {
-      item.title = details.join('\n');
-    }
     return item;
+  }
+
+  private scheduleUsageTooltipOpen(anchor: HTMLElement, provider: AgentProviderUsage): void {
+    this.cancelUsageTooltipClose();
+    if (this.usageTooltipOpenTimer !== undefined) {
+      window.clearTimeout(this.usageTooltipOpenTimer);
+    }
+    const delay = this.agentUsageTooltip.hidden ? Workspace.USAGE_TOOLTIP_OPEN_DELAY : 0;
+    this.usageTooltipOpenTimer = window.setTimeout(() => {
+      this.usageTooltipOpenTimer = undefined;
+      if (anchor.isConnected) {
+        this.showAgentUsageTooltip(anchor, provider);
+      }
+    }, delay);
+  }
+
+  private showAgentUsageTooltip(anchor: HTMLElement, provider: AgentProviderUsage): void {
+    if (this.usageTooltipOpenTimer !== undefined) {
+      window.clearTimeout(this.usageTooltipOpenTimer);
+      this.usageTooltipOpenTimer = undefined;
+    }
+    this.cancelUsageTooltipClose();
+    this.activeUsageAnchor = anchor;
+    this.renderAgentUsageTooltip(provider);
+    this.agentUsageTooltip.hidden = false;
+    this.positionAgentUsageTooltip(anchor);
+  }
+
+  private renderAgentUsageTooltip(provider: AgentProviderUsage): void {
+    const content = document.createDocumentFragment();
+    const header = document.createElement('div');
+    header.className = 'agent-usage-tooltip-header';
+
+    const heading = document.createElement('div');
+    heading.className = 'agent-usage-tooltip-heading';
+    heading.textContent = provider.provider === 'codex' ? 'Codex usage' : 'Kimi usage';
+    header.append(heading);
+
+    const badges = document.createElement('div');
+    badges.className = 'agent-usage-tooltip-badges';
+    if (provider.plan) {
+      badges.append(this.agentUsageText(provider.plan, 'agent-usage-tooltip-badge'));
+    }
+    if (provider.refreshing) {
+      badges.append(this.agentUsageText('Refreshing', 'agent-usage-tooltip-badge refreshing'));
+    } else if (provider.state === 'stale') {
+      badges.append(this.agentUsageText('Stale', 'agent-usage-tooltip-badge stale'));
+    } else if (provider.state === 'error') {
+      badges.append(this.agentUsageText('Unavailable', 'agent-usage-tooltip-badge error'));
+    }
+    header.append(badges);
+    content.append(header);
+
+    if (provider.source) {
+      const source = document.createElement('div');
+      source.className = 'agent-usage-tooltip-source';
+      source.textContent = `Source: ${provider.source}`;
+      content.append(source);
+    }
+
+    if (provider.windows.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'agent-usage-tooltip-empty';
+      empty.textContent = provider.state === 'loading' ? 'Loading usage…' : 'Usage details unavailable';
+      content.append(empty);
+    } else {
+      const meters = document.createElement('div');
+      meters.className = 'agent-usage-tooltip-meters';
+      for (const usageWindow of provider.windows) {
+        const amount = usageWindow.used !== undefined && usageWindow.limit !== undefined
+          ? `${this.formatUsageAmount(usageWindow.used)} / ${this.formatUsageAmount(usageWindow.limit)}`
+          : undefined;
+        this.appendUsageMeter(
+          meters,
+          usageWindow.name,
+          usageWindow.label,
+          usageWindow.usedPercent,
+          usageWindow.resetsAt,
+          amount);
+      }
+      content.append(meters);
+    }
+
+    if (provider.credits || provider.budget) {
+      const extras = document.createElement('div');
+      extras.className = 'agent-usage-tooltip-extras';
+      if (provider.credits) {
+        const credits = document.createElement('div');
+        credits.className = 'agent-usage-tooltip-extra';
+        credits.append(this.agentUsageText('Credits', 'agent-usage-tooltip-extra-name'));
+        const value = provider.credits.isUnlimited
+          ? 'Unlimited'
+          : provider.credits.remaining === undefined
+            ? 'Unknown'
+            : `${this.formatUsageAmount(provider.credits.remaining)} remaining`;
+        credits.append(this.agentUsageText(value, 'agent-usage-tooltip-extra-value'));
+        extras.append(credits);
+      }
+      if (provider.budget) {
+        this.appendUsageMeter(
+          extras,
+          provider.budget.name,
+          'Budget',
+          100 - provider.budget.remainingPercent,
+          provider.budget.resetsAt,
+          `${this.formatUsageAmount(provider.budget.used)} / ${this.formatUsageAmount(provider.budget.limit)}`);
+      }
+      content.append(extras);
+    }
+
+    if (provider.error) {
+      const error = document.createElement('div');
+      error.className = 'agent-usage-tooltip-error';
+      error.textContent = provider.error;
+      content.append(error);
+    }
+
+    const timing = document.createElement('div');
+    timing.className = 'agent-usage-tooltip-timing';
+    const updated = this.parseUsageDate(provider.updatedAt);
+    if (updated) {
+      timing.append(this.agentUsageText(
+        `Updated ${this.formatPastTime(updated)} · ${updated.toLocaleString()}`,
+        'agent-usage-tooltip-time'));
+    }
+    const nextRefresh = this.parseUsageDate(provider.nextRefreshAt);
+    if (provider.refreshing) {
+      timing.append(this.agentUsageText('Refreshing now', 'agent-usage-tooltip-time'));
+    } else if (nextRefresh) {
+      timing.append(this.agentUsageText(
+        `Next refresh ${this.formatFutureTime(nextRefresh)}`,
+        'agent-usage-tooltip-time'));
+    }
+    if (timing.childElementCount > 0) {
+      content.append(timing);
+    }
+
+    const scrollContainer = document.createElement('div');
+    scrollContainer.className = 'agent-usage-tooltip-content';
+    scrollContainer.append(content);
+    this.agentUsageTooltip.replaceChildren(scrollContainer);
+  }
+
+  private appendUsageMeter(
+    parent: HTMLElement,
+    name: string,
+    label: string,
+    usedPercent: number,
+    resetsAt?: string,
+    amount?: string
+  ): void {
+    const meter = document.createElement('section');
+    meter.className = 'agent-usage-tooltip-meter';
+
+    const heading = document.createElement('div');
+    heading.className = 'agent-usage-tooltip-meter-heading';
+    const title = document.createElement('div');
+    title.className = 'agent-usage-tooltip-meter-title';
+    title.append(this.agentUsageText(name, 'agent-usage-tooltip-meter-name'));
+    if (label !== name) {
+      title.append(this.agentUsageText(label, 'agent-usage-tooltip-meter-label'));
+    }
+    heading.append(title);
+    heading.append(this.agentUsageText(
+      `${this.formatUsagePercent(usedPercent)}%`,
+      `agent-usage-tooltip-percent ${this.usageSeverity(usedPercent)}`));
+    meter.append(heading);
+
+    const track = document.createElement('div');
+    track.className = 'agent-usage-tooltip-track';
+    track.role = 'progressbar';
+    track.setAttribute('aria-label', `${name} used`);
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    track.setAttribute('aria-valuenow', String(usedPercent));
+    const fill = document.createElement('div');
+    fill.className = `agent-usage-tooltip-fill ${this.usageSeverity(usedPercent)}`;
+    fill.style.width = `${Math.min(100, Math.max(0, usedPercent))}%`;
+    track.append(fill);
+    meter.append(track);
+
+    const details = document.createElement('div');
+    details.className = 'agent-usage-tooltip-meter-details';
+    if (amount) {
+      details.append(this.agentUsageText(amount, 'agent-usage-tooltip-amount'));
+    }
+    const reset = this.parseUsageDate(resetsAt);
+    if (reset) {
+      details.append(this.agentUsageText(
+        `Resets ${this.formatFutureTime(reset)} · ${reset.toLocaleString()}`,
+        'agent-usage-tooltip-reset'));
+    }
+    if (details.childElementCount > 0) {
+      meter.append(details);
+    }
+    parent.append(meter);
+  }
+
+  private positionAgentUsageTooltip(anchor: HTMLElement): void {
+    const margin = 8;
+    const gap = 9;
+    const anchorRect = anchor.getBoundingClientRect();
+    const tooltipRect = this.agentUsageTooltip.getBoundingClientRect();
+    const anchorCenter = anchorRect.left + anchorRect.width / 2;
+    const left = Math.min(
+      window.innerWidth - tooltipRect.width - margin,
+      Math.max(margin, anchorCenter - tooltipRect.width / 2));
+    const top = Math.max(margin, anchorRect.top - tooltipRect.height - gap);
+    const arrowLeft = Math.min(tooltipRect.width - 18, Math.max(18, anchorCenter - left));
+    this.agentUsageTooltip.style.left = `${left}px`;
+    this.agentUsageTooltip.style.top = `${top}px`;
+    this.agentUsageTooltip.style.setProperty('--agent-usage-arrow-left', `${arrowLeft}px`);
+  }
+
+  private scheduleUsageTooltipClose(): void {
+    if (this.usageTooltipCloseTimer !== undefined) {
+      return;
+    }
+    this.usageTooltipCloseTimer = window.setTimeout(() => {
+      this.usageTooltipCloseTimer = undefined;
+      this.hideAgentUsageTooltip();
+    }, Workspace.USAGE_TOOLTIP_CLOSE_DELAY);
+  }
+
+  private cancelUsageTooltipClose(): void {
+    if (this.usageTooltipCloseTimer !== undefined) {
+      window.clearTimeout(this.usageTooltipCloseTimer);
+      this.usageTooltipCloseTimer = undefined;
+    }
+  }
+
+  private hideAgentUsageTooltip(): void {
+    if (this.usageTooltipOpenTimer !== undefined) {
+      window.clearTimeout(this.usageTooltipOpenTimer);
+      this.usageTooltipOpenTimer = undefined;
+    }
+    this.cancelUsageTooltipClose();
+    this.activeUsageAnchor = undefined;
+    this.agentUsageTooltip.hidden = true;
+  }
+
+  private parseUsageDate(value?: string): Date | undefined {
+    if (!value) {
+      return undefined;
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  }
+
+  private formatUsagePercent(value: number): string {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  }
+
+  private formatUsageAmount(value: number): string {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  private usageSeverity(value: number): 'normal' | 'warning' | 'critical' {
+    return value >= 90 ? 'critical' : value >= 70 ? 'warning' : 'normal';
+  }
+
+  private formatPastTime(date: Date): string {
+    const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (seconds < 45) {
+      return 'just now';
+    }
+    if (seconds < 3600) {
+      return `${Math.floor(seconds / 60)}m ago`;
+    }
+    if (seconds < 86400) {
+      return `${Math.floor(seconds / 3600)}h ago`;
+    }
+    return `${Math.floor(seconds / 86400)}d ago`;
+  }
+
+  private formatFutureTime(date: Date): string {
+    const seconds = Math.max(0, Math.floor((date.getTime() - Date.now()) / 1000));
+    if (seconds < 60) {
+      return seconds === 0 ? 'now' : 'in less than a minute';
+    }
+    if (seconds < 3600) {
+      return `in ${Math.ceil(seconds / 60)}m`;
+    }
+    if (seconds < 86400) {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor(seconds % 3600 / 60);
+      return `in ${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`;
+    }
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor(seconds % 86400 / 3600);
+    return `in ${days}d${hours > 0 ? ` ${hours}h` : ''}`;
   }
 
   private agentUsageText(text: string, className: string): HTMLSpanElement {

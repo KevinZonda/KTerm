@@ -22,16 +22,38 @@ export interface ThemeSettings {
 }
 
 export interface AgentUsageWindow {
+  name: string;
   label: string;
   usedPercent: number;
+  resetsAt?: string;
+  used?: number;
+  limit?: number;
+}
+
+export interface AgentUsageCredits {
+  remaining?: number;
+  isUnlimited: boolean;
+}
+
+export interface AgentUsageBudget {
+  name: string;
+  limit: number;
+  used: number;
+  remainingPercent: number;
   resetsAt?: string;
 }
 
 export interface AgentProviderUsage {
   provider: 'codex' | 'kimi';
   state: 'loading' | 'ready' | 'stale' | 'error';
+  refreshing: boolean;
+  source?: string;
+  plan?: string;
   windows: AgentUsageWindow[];
+  credits?: AgentUsageCredits;
+  budget?: AgentUsageBudget;
   updatedAt?: string;
+  nextRefreshAt?: string;
   error?: string;
 }
 
@@ -188,28 +210,67 @@ export class NativeBridge {
             continue;
           }
           const window = rawWindow as Record<string, unknown>;
-          if (typeof window.label !== 'string' || typeof window.usedPercent !== 'number' ||
+          if (typeof window.name !== 'string' || typeof window.label !== 'string' ||
+              typeof window.usedPercent !== 'number' ||
               !Number.isFinite(window.usedPercent)) {
             continue;
           }
           windows.push({
+            name: window.name,
             label: window.label,
             usedPercent: Math.min(100, Math.max(0, window.usedPercent)),
-            resetsAt: typeof window.resetsAt === 'string' ? window.resetsAt : undefined
+            resetsAt: typeof window.resetsAt === 'string' ? window.resetsAt : undefined,
+            used: this.finiteNumber(window.used),
+            limit: this.finiteNumber(window.limit)
           });
         }
       }
 
+      const rawCredits = candidate.credits;
+      const credits = typeof rawCredits === 'object' && rawCredits !== null
+        ? rawCredits as Record<string, unknown>
+        : undefined;
+      const rawBudget = candidate.budget;
+      const budget = typeof rawBudget === 'object' && rawBudget !== null
+        ? rawBudget as Record<string, unknown>
+        : undefined;
+
       providers.push({
         provider: candidate.provider,
         state: candidate.state,
+        refreshing: candidate.refreshing === true,
+        source: typeof candidate.source === 'string' ? candidate.source : undefined,
+        plan: typeof candidate.plan === 'string' ? candidate.plan : undefined,
         windows,
+        credits: credits
+          ? {
+              remaining: this.finiteNumber(credits.remaining),
+              isUnlimited: credits.isUnlimited === true
+            }
+          : undefined,
+        budget: budget && typeof budget.name === 'string' &&
+          this.finiteNumber(budget.limit) !== undefined &&
+          this.finiteNumber(budget.used) !== undefined &&
+          this.finiteNumber(budget.remainingPercent) !== undefined
+          ? {
+              name: budget.name,
+              limit: this.finiteNumber(budget.limit)!,
+              used: this.finiteNumber(budget.used)!,
+              remainingPercent: Math.min(100, Math.max(0, this.finiteNumber(budget.remainingPercent)!)),
+              resetsAt: typeof budget.resetsAt === 'string' ? budget.resetsAt : undefined
+            }
+          : undefined,
         updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : undefined,
+        nextRefreshAt: typeof candidate.nextRefreshAt === 'string' ? candidate.nextRefreshAt : undefined,
         error: typeof candidate.error === 'string' ? candidate.error : undefined
       });
     }
 
     return { providers };
+  }
+
+  private finiteNumber(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   }
 
   public writeClipboard(text: string): void {

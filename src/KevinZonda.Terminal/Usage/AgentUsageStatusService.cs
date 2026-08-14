@@ -196,29 +196,58 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
 
     private static AgentProviderUsageStatus ToStatus(UsageProvider provider, ProviderRuntime runtime)
     {
+        var snapshot = runtime.Snapshot;
         var state = runtime.RefreshInProgress && runtime.Snapshot is null
             ? "loading"
             : runtime.Error is not null
                 ? runtime.Snapshot is null ? "error" : "stale"
                 : runtime.Snapshot is null ? "loading" : "ready";
-        var windows = runtime.Snapshot is null
+        var windows = snapshot is null
             ? []
-            : new[] { runtime.Snapshot.Primary, runtime.Snapshot.Secondary }
+            : new[] { snapshot.Primary, snapshot.Secondary }
                 .OfType<UsageWindow>()
+                .Concat(snapshot.ExtraWindows)
                 .OrderBy(window => window.Window)
                 .Select(window => new AgentUsageWindowStatus(
+                    window.Name,
                     FormatWindowLabel(window),
                     window.UsedPercent,
-                    window.ResetsAt))
+                    window.ResetsAt,
+                    window.Used,
+                    window.Limit))
                 .ToArray();
 
         return new AgentProviderUsageStatus(
             provider == UsageProvider.Codex ? "codex" : "kimi",
             state,
+            runtime.RefreshInProgress,
+            snapshot is null ? null : FormatSource(snapshot.Source),
+            snapshot?.Plan,
             windows,
-            runtime.Snapshot?.UpdatedAt,
+            snapshot?.Credits is { } credits
+                ? new AgentUsageCreditsStatus(credits.Remaining, credits.IsUnlimited)
+                : null,
+            snapshot?.Budget is { } budget
+                ? new AgentUsageBudgetStatus(
+                    budget.Name,
+                    budget.Limit,
+                    budget.Used,
+                    budget.RemainingPercent,
+                    budget.ResetsAt)
+                : null,
+            snapshot?.UpdatedAt,
+            runtime.LastAttempt + RefreshInterval,
             runtime.Error);
     }
+
+    private static string FormatSource(UsageSource source) => source switch
+    {
+        UsageSource.CodexOAuth => "OAuth",
+        UsageSource.CodexAppServer => "App server",
+        UsageSource.KimiCodeApiKey => "API key",
+        UsageSource.KimiCodeCliCredential => "CLI credential",
+        _ => source.ToString()
+    };
 
     private static string FormatWindowLabel(UsageWindow window)
     {
