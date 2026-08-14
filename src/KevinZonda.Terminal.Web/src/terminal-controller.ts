@@ -60,7 +60,6 @@ export class TerminalController {
     this.element = document.createElement('div');
     this.element.className = 'terminal-pane';
     this.element.dataset.sessionId = session.sessionId;
-    this.element.title = `${session.shellName} · PID ${session.processId}`;
 
     this.host.className = 'terminal-host';
     this.element.append(this.host);

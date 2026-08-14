@@ -28,6 +28,7 @@ type LayoutNode =
 interface TerminalTabState {
   sessionId: string;
   title: string;
+  processInfo: string;
 }
 
 interface PaneState {
@@ -672,7 +673,8 @@ export class Workspace implements TerminalCallbacks {
   private createTerminalTab(session: SessionCreated): TerminalTabState {
     return {
       sessionId: session.sessionId,
-      title: session.shellName
+      title: session.shellName,
+      processInfo: `${session.shellName} · PID ${session.processId}`
     };
   }
 
@@ -885,7 +887,7 @@ export class Workspace implements TerminalCallbacks {
       const activate = document.createElement('button');
       activate.type = 'button';
       activate.className = 'pane-tab-activate';
-      activate.title = tab.title;
+      activate.title = `${tab.title}\n${tab.processInfo}`;
       activate.textContent = tab.title || 'Terminal';
       activate.addEventListener('click', () => this.activateTab(pane.id, tab.sessionId));
 
