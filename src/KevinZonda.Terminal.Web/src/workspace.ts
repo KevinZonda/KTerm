@@ -84,6 +84,7 @@ export class Workspace implements TerminalCallbacks {
   private usageTooltipOpenTimer?: number;
   private usageTooltipCloseTimer?: number;
   private activeUsageAnchor?: HTMLElement;
+  private activeUsageProvider?: 'codex' | 'kimi';
   private tabDrag?: TabDragState;
 
   public constructor(bridge: NativeBridge) {
@@ -94,7 +95,7 @@ export class Workspace implements TerminalCallbacks {
     this.agentUsageTooltip = document.createElement('div');
     this.agentUsageTooltip.id = 'agent-usage-tooltip';
     this.agentUsageTooltip.className = 'agent-usage-tooltip';
-    this.agentUsageTooltip.role = 'tooltip';
+    this.agentUsageTooltip.role = 'dialog';
     this.agentUsageTooltip.hidden = true;
     this.app.append(this.agentUsageTooltip);
     this.peekRail = this.requireElement('workspace-peek');
@@ -1267,6 +1268,10 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private renderAgentUsage(status: AgentUsageStatus): void {
+    const openProvider = this.agentUsageTooltip.hidden ? undefined : this.activeUsageProvider;
+    const restoreAnchorFocus = this.activeUsageAnchor === document.activeElement;
+    const restoreRefreshFocus = document.activeElement instanceof HTMLElement &&
+      document.activeElement.classList.contains('agent-usage-tooltip-refresh');
     this.hideAgentUsageTooltip();
     if (status.providers.length === 0) {
       const idle = document.createElement('span');
@@ -1277,22 +1282,41 @@ export class Workspace implements TerminalCallbacks {
     }
 
     const fragment = document.createDocumentFragment();
+    let tooltipTarget: { anchor: HTMLElement; provider: AgentProviderUsage } | undefined;
     for (const provider of status.providers) {
-      fragment.append(this.renderAgentProviderUsage(provider));
+      const item = this.renderAgentProviderUsage(provider);
+      fragment.append(item);
+      if (provider.provider === openProvider) {
+        tooltipTarget = { anchor: item, provider };
+      }
     }
     this.agentStatusBar.replaceChildren(fragment);
+    if (tooltipTarget) {
+      this.showAgentUsageTooltip(tooltipTarget.anchor, tooltipTarget.provider);
+      if (restoreAnchorFocus) {
+        tooltipTarget.anchor.focus({ preventScroll: true });
+      } else if (restoreRefreshFocus) {
+        this.agentUsageTooltip.querySelector<HTMLButtonElement>('.agent-usage-tooltip-refresh')
+          ?.focus({ preventScroll: true });
+      }
+    }
   }
 
   private renderAgentProviderUsage(provider: AgentProviderUsage): HTMLElement {
-    const item = document.createElement('div');
+    const item = document.createElement('button');
+    item.type = 'button';
     item.className = `agent-usage agent-usage-${provider.state}`;
-    item.tabIndex = 0;
-    item.setAttribute('aria-label', `${provider.provider === 'codex' ? 'Codex' : 'Kimi'} usage details`);
-    item.setAttribute('aria-describedby', this.agentUsageTooltip.id);
+    item.setAttribute(
+      'aria-label',
+      `${provider.provider === 'codex' ? 'Codex' : 'Kimi'} usage details; click to refresh`);
+    item.setAttribute('aria-controls', this.agentUsageTooltip.id);
+    item.setAttribute('aria-expanded', 'false');
+    item.setAttribute('aria-haspopup', 'dialog');
     item.addEventListener('pointerenter', () => this.scheduleUsageTooltipOpen(item, provider));
     item.addEventListener('pointerleave', () => this.scheduleUsageTooltipClose());
     item.addEventListener('focus', () => this.showAgentUsageTooltip(item, provider));
     item.addEventListener('blur', () => this.scheduleUsageTooltipClose());
+    item.addEventListener('click', () => this.requestAgentUsageRefresh(provider.provider, provider.refreshing));
 
     const name = document.createElement('span');
     name.className = 'agent-usage-name';
@@ -1339,7 +1363,13 @@ export class Workspace implements TerminalCallbacks {
       this.usageTooltipOpenTimer = undefined;
     }
     this.cancelUsageTooltipClose();
+    this.activeUsageAnchor?.setAttribute('aria-expanded', 'false');
     this.activeUsageAnchor = anchor;
+    this.activeUsageProvider = provider.provider;
+    anchor.setAttribute('aria-expanded', 'true');
+    this.agentUsageTooltip.setAttribute(
+      'aria-label',
+      `${provider.provider === 'codex' ? 'Codex' : 'Kimi'} usage details`);
     this.renderAgentUsageTooltip(provider);
     this.agentUsageTooltip.hidden = false;
     this.positionAgentUsageTooltip(anchor);
@@ -1367,7 +1397,26 @@ export class Workspace implements TerminalCallbacks {
     } else if (provider.state === 'error') {
       badges.append(this.agentUsageText('Unavailable', 'agent-usage-tooltip-badge error'));
     }
-    header.append(badges);
+    const actions = document.createElement('div');
+    actions.className = 'agent-usage-tooltip-actions';
+    actions.append(badges);
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'agent-usage-tooltip-refresh';
+    refresh.textContent = '↻';
+    refresh.title = provider.refreshing ? 'Refreshing usage' : 'Refresh usage';
+    refresh.setAttribute(
+      'aria-label',
+      `Refresh ${provider.provider === 'codex' ? 'Codex' : 'Kimi'} usage`);
+    refresh.setAttribute('aria-disabled', String(provider.refreshing));
+    refresh.addEventListener('focus', () => this.cancelUsageTooltipClose());
+    refresh.addEventListener('blur', () => this.scheduleUsageTooltipClose());
+    refresh.addEventListener('click', event => {
+      event.stopPropagation();
+      this.requestAgentUsageRefresh(provider.provider, provider.refreshing);
+    });
+    actions.append(refresh);
+    header.append(actions);
     content.append(header);
 
     if (provider.source) {
@@ -1554,8 +1603,18 @@ export class Workspace implements TerminalCallbacks {
       this.usageTooltipOpenTimer = undefined;
     }
     this.cancelUsageTooltipClose();
+    this.activeUsageAnchor?.setAttribute('aria-expanded', 'false');
     this.activeUsageAnchor = undefined;
+    this.activeUsageProvider = undefined;
     this.agentUsageTooltip.hidden = true;
+  }
+
+  private requestAgentUsageRefresh(provider: 'codex' | 'kimi', refreshing: boolean): void {
+    if (refreshing) {
+      return;
+    }
+    void this.bridge.refreshAgentUsage(provider)
+      .catch(error => this.setStatus(`Unable to refresh usage: ${String(error)}`, true));
   }
 
   private parseUsageDate(value?: string): Date | undefined {

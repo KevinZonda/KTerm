@@ -9,6 +9,7 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
 {
     private static readonly TimeSpan DetectionInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan ManualRefreshCooldown = TimeSpan.FromSeconds(15);
 
     private readonly TerminalSessionManager _sessions;
     private readonly AgentProcessDetector _detector;
@@ -57,6 +58,33 @@ internal sealed class AgentUsageStatusService : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         _monitorTask ??= Task.Run(MonitorAsync);
+    }
+
+    internal bool RequestRefresh(UsageProvider provider)
+    {
+        if (Volatile.Read(ref _disposed) != 0 || !_clients.TryGetValue(provider, out var client))
+        {
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        lock (_stateLock)
+        {
+            var runtime = _providers[provider];
+            if (!runtime.Active || runtime.RefreshInProgress
+                || runtime.LastAttempt is { } lastAttempt && now - lastAttempt < ManualRefreshCooldown)
+            {
+                return false;
+            }
+
+            runtime.LastAttempt = now;
+            runtime.RefreshInProgress = true;
+            runtime.Error = null;
+        }
+
+        RaiseStatusChanged();
+        TrackRefresh(RefreshAsync(provider, client));
+        return true;
     }
 
     private async Task MonitorAsync()

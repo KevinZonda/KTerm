@@ -146,6 +146,19 @@ internal sealed class WebViewBridge : IDisposable
                     Post("settings.saved", message.RequestId, payload: new { settings = _settings });
                     break;
 
+                case "agentUsage.refresh":
+                    var provider = GetString(message.Payload, "provider") switch
+                    {
+                        "codex" => KevinZonda.AgentUsageMonitor.UsageProvider.Codex,
+                        "kimi" => KevinZonda.AgentUsageMonitor.UsageProvider.KimiCode,
+                        _ => throw new InvalidDataException("Unsupported usage provider.")
+                    };
+                    Post(
+                        "agentUsage.refreshResult",
+                        message.RequestId,
+                        payload: new { started = _agentUsage.RequestRefresh(provider) });
+                    break;
+
                 default:
                     throw new InvalidDataException($"Unknown bridge message type '{message.Type}'.");
             }

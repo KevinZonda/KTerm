@@ -149,6 +149,11 @@ export class NativeBridge {
     return this.settingsFrom(await this.request('settings.fontSize', { size }));
   }
 
+  public async refreshAgentUsage(provider: 'codex' | 'kimi'): Promise<boolean> {
+    const event = await this.request('agentUsage.refresh', { provider });
+    return event.payload.started === true;
+  }
+
   public settingsFrom(event: BridgeEvent): AppSettings {
     const settings = event.payload.settings;
     if (typeof settings !== 'object' || settings === null) {

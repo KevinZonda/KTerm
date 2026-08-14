@@ -323,12 +323,17 @@ button {
 .agent-usage {
   display: inline-flex;
   min-width: 0;
+  padding: 0;
   align-items: center;
   gap: 7px;
+  color: inherit;
+  background: transparent;
+  border: 0;
   transform: translateY(-1px);
   border-radius: 3px;
+  font: inherit;
   outline: none;
-  cursor: default;
+  cursor: pointer;
 }
 
 .agent-usage:focus-visible {
@@ -439,11 +444,43 @@ button {
 }
 
 .agent-usage-tooltip-badges,
+.agent-usage-tooltip-actions,
 .agent-usage-tooltip-meter-title {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 6px;
+}
+
+.agent-usage-tooltip-refresh {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  padding: 0;
+  place-items: center;
+  color: var(--chrome-text-dim, #aab3c0);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agent-usage-tooltip-refresh:hover:not([aria-disabled="true"]) {
+  color: var(--chrome-text-bright, #eef2f6);
+  background: color-mix(in srgb, var(--chrome-border, #303845) 55%, transparent);
+}
+
+.agent-usage-tooltip-refresh:focus-visible {
+  border-color: var(--chrome-text-dim, #aab3c0);
+  outline: none;
+}
+
+.agent-usage-tooltip-refresh[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .agent-usage-tooltip-badge,
