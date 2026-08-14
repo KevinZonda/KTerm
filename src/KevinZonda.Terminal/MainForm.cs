@@ -14,6 +14,7 @@ internal sealed class MainForm : Form
 {
     private const string AppHostName = "com.kevinzonda.terminal";
     private const int SystemCommandSettings = 0x1000;
+    private const int SystemCommandAbout = 0x1001;
     private static readonly Color FrameColor = Color.FromArgb(23, 27, 34);
     private static readonly Color FrameBorderColor = Color.FromArgb(48, 56, 69);
     private static readonly Color FrameTextColor = Color.FromArgb(216, 222, 233);
@@ -54,17 +55,27 @@ internal sealed class MainForm : Form
     {
         base.OnHandleCreated(eventArgs);
         ApplyDwmFrameColors();
-        AddSettingsToSystemMenu();
+        AddCustomSystemMenuItems();
     }
 
     protected override void WndProc(ref Message message)
     {
-        if (message.Msg == NativeMethods.WmSysCommand &&
-            message.WParam.ToInt64() == SystemCommandSettings)
+        if (message.Msg == NativeMethods.WmSysCommand)
         {
-            BeginInvoke((Action)ShowSettings);
-            message.Result = IntPtr.Zero;
-            return;
+            var command = message.WParam.ToInt64();
+            if (command == SystemCommandSettings)
+            {
+                BeginInvoke((Action)ShowSettings);
+                message.Result = IntPtr.Zero;
+                return;
+            }
+
+            if (command == SystemCommandAbout)
+            {
+                BeginInvoke((Action)ShowAbout);
+                message.Result = IntPtr.Zero;
+                return;
+            }
         }
 
         base.WndProc(ref message);
@@ -336,7 +347,7 @@ internal sealed class MainForm : Form
         NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DwmTextColor, ref textColor, valueSize);
     }
 
-    private void AddSettingsToSystemMenu()
+    private void AddCustomSystemMenuItems()
     {
         var systemMenu = NativeMethods.GetSystemMenu(Handle, false);
         if (systemMenu == IntPtr.Zero)
@@ -354,6 +365,11 @@ internal sealed class MainForm : Form
             NativeMethods.MenuFlagString,
             SystemCommandSettings,
             "Settings...\tAlt+S");
+        NativeMethods.AppendMenuW(
+            systemMenu,
+            NativeMethods.MenuFlagString,
+            SystemCommandAbout,
+            "About");
     }
 
     private void SetSettingsSystemMenuEnabled(bool enabled)
@@ -411,6 +427,12 @@ internal sealed class MainForm : Form
         }
 
         return base.ProcessCmdKey(ref message, keyData);
+    }
+
+    private void ShowAbout()
+    {
+        using var aboutForm = new AboutForm();
+        aboutForm.ShowDialog(this);
     }
 
     private async void ShowSettings()
