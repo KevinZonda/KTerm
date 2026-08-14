@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using KevinZonda.Terminal.Configuration;
+using KevinZonda.Terminal.Monitoring;
 using KevinZonda.Terminal.Terminal;
 using KevinZonda.Terminal.Usage;
 using Microsoft.Web.WebView2.Core;
@@ -18,6 +19,7 @@ internal sealed class WebViewBridge : IDisposable
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
     private readonly AgentUsageStatusService _agentUsage;
+    private readonly SystemMetricsService _systemMetrics;
     private readonly Action _openSettings;
     private readonly Action<string> _openExternal;
     private readonly Func<double, Task<AppSettings>> _saveFontSize;
@@ -30,6 +32,7 @@ internal sealed class WebViewBridge : IDisposable
         WebView2 webView,
         TerminalSessionManager sessions,
         AgentUsageStatusService agentUsage,
+        SystemMetricsService systemMetrics,
         Action openSettings,
         Action<string> openExternal,
         Func<double, Task<AppSettings>> saveFontSize,
@@ -38,6 +41,7 @@ internal sealed class WebViewBridge : IDisposable
         _webView = webView;
         _sessions = sessions;
         _agentUsage = agentUsage;
+        _systemMetrics = systemMetrics;
         _openSettings = openSettings;
         _openExternal = openExternal;
         _saveFontSize = saveFontSize;
@@ -45,6 +49,7 @@ internal sealed class WebViewBridge : IDisposable
         _sessions.OutputReceived += QueueOutput;
         _sessions.SessionExited += QueueExit;
         _agentUsage.StatusChanged += QueueAgentUsage;
+        _systemMetrics.StatusChanged += QueueSystemMetrics;
         _webView.CoreWebView2.WebMessageReceived += HandleMessage;
 
         _outputTimer = new System.Windows.Forms.Timer
@@ -87,7 +92,8 @@ internal sealed class WebViewBridge : IDisposable
                         application = "KevinZonda Terminal",
                         version = Application.ProductVersion,
                         settings = _settings,
-                        agentUsage = _agentUsage.Current
+                        agentUsage = _agentUsage.Current,
+                        systemMetrics = _systemMetrics.Current
                     });
                     break;
 
@@ -228,6 +234,22 @@ internal sealed class WebViewBridge : IDisposable
         }
     }
 
+    private void QueueSystemMetrics(SystemMetricsStatus status)
+    {
+        if (Volatile.Read(ref _disposed) != 0 || _webView.IsDisposed)
+        {
+            return;
+        }
+
+        try
+        {
+            _webView.BeginInvoke(() => Post("systemMetrics.changed", payload: new { systemMetrics = status }));
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
     private void FlushOutput(object? sender, EventArgs eventArgs)
     {
         foreach (var (sessionId, queue) in _outputQueues)
@@ -336,6 +358,7 @@ internal sealed class WebViewBridge : IDisposable
         _sessions.OutputReceived -= QueueOutput;
         _sessions.SessionExited -= QueueExit;
         _agentUsage.StatusChanged -= QueueAgentUsage;
+        _systemMetrics.StatusChanged -= QueueSystemMetrics;
 
         if (_webView.CoreWebView2 is not null)
         {

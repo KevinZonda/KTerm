@@ -18,6 +18,7 @@ internal sealed class SettingsForm : Form
     private readonly Label _preview = new();
     private readonly ComboBox _themeName = new();
     private readonly Panel _themePreview = new();
+    private readonly CheckBox _showRemainingUsage = new();
     private readonly TabControl _tabs = new();
     private readonly ComboBox _shellProfile = new();
     private readonly TextBox _shellExecutable = new();
@@ -63,6 +64,10 @@ internal sealed class SettingsForm : Form
         Theme = new ThemeSettings
         {
             Name = _themeName.Text
+        },
+        Indicators = new IndicatorSettings
+        {
+            ShowRemainingUsage = _showRemainingUsage.Checked
         },
         Shell = SelectedShellSettings()
     });
@@ -137,6 +142,7 @@ internal sealed class SettingsForm : Form
         _tabs.Margin = new Padding(0, 0, 0, 14);
         _tabs.TabPages.Add(CreateFontPage());
         _tabs.TabPages.Add(CreateThemePage());
+        _tabs.TabPages.Add(CreateIndicatorsPage());
         _shellPage = CreateShellPage();
         _tabs.TabPages.Add(_shellPage);
         root.Controls.Add(_tabs, 0, 0);
@@ -347,6 +353,46 @@ internal sealed class SettingsForm : Form
         return page;
     }
 
+    private TabPage CreateIndicatorsPage()
+    {
+        var page = new TabPage("Indicators")
+        {
+            BackColor = SurfaceColor,
+            ForeColor = ForeColor,
+            Padding = new Padding(16),
+            UseVisualStyleBackColor = false
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = SurfaceColor,
+            Margin = new Padding(0)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _showRemainingUsage.AutoSize = true;
+        _showRemainingUsage.Text = "Show remaining quota instead of used";
+        _showRemainingUsage.ForeColor = ForeColor;
+        _showRemainingUsage.BackColor = SurfaceColor;
+        _showRemainingUsage.Margin = new Padding(0, 0, 0, 8);
+        layout.Controls.Add(_showRemainingUsage, 0, 0);
+
+        var description = CreateLabel(
+            "Display remaining percentages for Codex and Kimi usage limits.");
+        description.ForeColor = Color.FromArgb(170, 179, 192);
+        description.AutoSize = true;
+        description.Margin = new Padding(22, 0, 0, 0);
+        layout.Controls.Add(description, 0, 1);
+
+        page.Controls.Add(layout);
+        return page;
+    }
+
     private Control CreateActions()
     {
         var actions = new TableLayoutPanel
@@ -432,6 +478,7 @@ internal sealed class SettingsForm : Form
                 _themeName.SelectedIndex = 0;
             }
 
+            _showRemainingUsage.Checked = normalized.Indicators.ShowRemainingUsage;
             ApplyShellValues(normalized.Shell);
         }
         finally

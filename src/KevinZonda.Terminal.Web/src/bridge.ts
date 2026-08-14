@@ -15,10 +15,15 @@ export interface FontSettings {
 export interface AppSettings {
   font: FontSettings;
   theme: ThemeSettings;
+  indicators: IndicatorSettings;
 }
 
 export interface ThemeSettings {
   name: string;
+}
+
+export interface IndicatorSettings {
+  showRemainingUsage: boolean;
 }
 
 export interface AgentUsageWindow {
@@ -61,9 +66,18 @@ export interface AgentUsageStatus {
   providers: AgentProviderUsage[];
 }
 
+export interface SystemMetricsStatus {
+  cpuPercent?: number;
+  usedMemoryBytes: number;
+  availableMemoryBytes: number;
+  totalMemoryBytes: number;
+  updatedAt?: string;
+}
+
 export interface AppInitialState {
   settings: AppSettings;
   agentUsage: AgentUsageStatus;
+  systemMetrics: SystemMetricsStatus;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -74,6 +88,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   theme: {
     name: DEFAULT_THEME_NAME
+  },
+  indicators: {
+    showRemainingUsage: false
   }
 };
 
@@ -104,7 +121,8 @@ export class NativeBridge {
     const event = await this.request('app.ready', {});
     return {
       settings: this.settingsFrom(event),
-      agentUsage: this.agentUsageFrom(event)
+      agentUsage: this.agentUsageFrom(event),
+      systemMetrics: this.systemMetricsFrom(event)
     };
   }
 
@@ -167,6 +185,9 @@ export class NativeBridge {
     const theme = typeof partialSettings.theme === 'object' && partialSettings.theme !== null
       ? partialSettings.theme
       : DEFAULT_SETTINGS.theme;
+    const indicators = typeof partialSettings.indicators === 'object' && partialSettings.indicators !== null
+      ? partialSettings.indicators
+      : DEFAULT_SETTINGS.indicators;
 
     const family = typeof font.family === 'string' && font.family.trim()
       ? font.family.trim()
@@ -180,7 +201,8 @@ export class NativeBridge {
 
     return {
       font: { family, size, lineHeight },
-      theme: { name: normalizeTerminalThemeName(theme.name) }
+      theme: { name: normalizeTerminalThemeName(theme.name) },
+      indicators: { showRemainingUsage: indicators.showRemainingUsage === true }
     };
   }
 
@@ -274,8 +296,34 @@ export class NativeBridge {
     return { providers };
   }
 
+  public systemMetricsFrom(event: BridgeEvent): SystemMetricsStatus {
+    const value = event.payload.systemMetrics;
+    if (typeof value !== 'object' || value === null) {
+      return { usedMemoryBytes: 0, availableMemoryBytes: 0, totalMemoryBytes: 0 };
+    }
+
+    const candidate = value as Record<string, unknown>;
+    return {
+      cpuPercent: this.clampedNumber(candidate.cpuPercent, 0, 100),
+      usedMemoryBytes: this.nonNegativeNumber(candidate.usedMemoryBytes),
+      availableMemoryBytes: this.nonNegativeNumber(candidate.availableMemoryBytes),
+      totalMemoryBytes: this.nonNegativeNumber(candidate.totalMemoryBytes),
+      updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : undefined
+    };
+  }
+
   private finiteNumber(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  }
+
+  private nonNegativeNumber(value: unknown): number {
+    const number = this.finiteNumber(value);
+    return number === undefined ? 0 : Math.max(0, number);
+  }
+
+  private clampedNumber(value: unknown, minimum: number, maximum: number): number | undefined {
+    const number = this.finiteNumber(value);
+    return number === undefined ? undefined : Math.min(maximum, Math.max(minimum, number));
   }
 
   public writeClipboard(text: string): void {

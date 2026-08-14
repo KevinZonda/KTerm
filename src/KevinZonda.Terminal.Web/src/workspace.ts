@@ -5,7 +5,8 @@ import type {
   AppSettings,
   BridgeEvent,
   NativeBridge,
-  SessionCreated
+  SessionCreated,
+  SystemMetricsStatus
 } from './bridge';
 import { TerminalController } from './terminal-controller';
 import type { TerminalCallbacks } from './terminal-controller';
@@ -60,6 +61,7 @@ export class Workspace implements TerminalCallbacks {
   private readonly bridge: NativeBridge;
   private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
+  private readonly systemStatus: HTMLElement;
   private readonly agentStatusBar: HTMLElement;
   private readonly agentUsageTooltip: HTMLElement;
   private readonly peekRail: HTMLElement;
@@ -72,6 +74,7 @@ export class Workspace implements TerminalCallbacks {
   private readonly closedSessionIds = new Set<string>();
   private readonly workspaces: WorkspaceState[] = [];
   private readonly paneElements = new Map<string, HTMLElement>();
+  private agentUsageStatus: AgentUsageStatus = { providers: [] };
   private activeWorkspaceId?: string;
   private editingWorkspaceId?: string;
   private nextWorkspaceNumber = 1;
@@ -91,6 +94,7 @@ export class Workspace implements TerminalCallbacks {
     this.bridge = bridge;
     this.app = this.requireElement('app');
     this.workspace = this.requireElement('workspace');
+    this.systemStatus = this.requireElement('system-status');
     this.agentStatusBar = this.requireElement('agent-status-bar');
     this.agentUsageTooltip = document.createElement('div');
     this.agentUsageTooltip.id = 'agent-usage-tooltip';
@@ -118,6 +122,9 @@ export class Workspace implements TerminalCallbacks {
     this.bridge.on('agentUsage.changed', event => {
       this.renderAgentUsage(this.bridge.agentUsageFrom(event));
     });
+    this.bridge.on('systemMetrics.changed', event => {
+      this.renderSystemMetrics(this.bridge.systemMetricsFrom(event));
+    });
     this.bridge.on('app.runtimeFailed', event => {
       this.setStatus(`WebView2 process failed: ${this.payloadString(event, 'kind')}`, true);
     });
@@ -132,6 +139,7 @@ export class Workspace implements TerminalCallbacks {
     this.setStatus('Starting KevinZonda Terminal…');
     const initialState = await this.bridge.ready();
     this.applySettings(initialState.settings);
+    this.renderSystemMetrics(initialState.systemMetrics);
     this.renderAgentUsage(initialState.agentUsage);
     await this.createWorkspace();
     this.setStatus('');
@@ -695,12 +703,17 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private applySettings(settings: AppSettings): void {
+    const usageDisplayChanged =
+      this.settings.indicators.showRemainingUsage !== settings.indicators.showRemainingUsage;
     this.settings = settings;
     applyTerminalThemeToDocument(settings.theme.name);
     this.terminals.forEach(terminal => {
       terminal.applyFontSettings(settings.font);
       terminal.applyThemeSettings(settings.theme);
     });
+    if (usageDisplayChanged) {
+      this.renderAgentUsage(this.agentUsageStatus);
+    }
   }
 
   private handleOutput(event: BridgeEvent): void {
@@ -1268,6 +1281,7 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private renderAgentUsage(status: AgentUsageStatus): void {
+    this.agentUsageStatus = status;
     const openProvider = this.agentUsageTooltip.hidden ? undefined : this.activeUsageProvider;
     const restoreAnchorFocus = this.activeUsageAnchor === document.activeElement;
     const restoreRefreshFocus = document.activeElement instanceof HTMLElement &&
@@ -1302,6 +1316,46 @@ export class Workspace implements TerminalCallbacks {
     }
   }
 
+  private renderSystemMetrics(status: SystemMetricsStatus): void {
+    const cpu = document.createElement('span');
+    cpu.className = 'system-metric system-metric-cpu';
+    const roundedCpu = status.cpuPercent === undefined ? undefined : Math.round(status.cpuPercent);
+    cpu.textContent = `CPU ${roundedCpu === undefined ? '--' : roundedCpu}%`;
+    if (status.cpuPercent !== undefined) {
+      cpu.classList.add(this.systemMetricSeverity(status.cpuPercent, 80, 95));
+    }
+
+    const memory = document.createElement('span');
+    memory.className = 'system-metric system-metric-memory';
+    const hasMemory = status.totalMemoryBytes > 0;
+    const memoryPercent = hasMemory ? status.usedMemoryBytes / status.totalMemoryBytes * 100 : 0;
+    memory.textContent = hasMemory
+      ? `RAM ${this.formatMemoryValue(status.usedMemoryBytes)}/${this.formatMemory(status.totalMemoryBytes)}`
+      : 'RAM --';
+    if (hasMemory) {
+      memory.classList.add(this.systemMetricSeverity(memoryPercent, 85, 95));
+    }
+
+    const details: string[] = [];
+    if (status.cpuPercent !== undefined) {
+      details.push(`CPU ${this.formatUsagePercent(status.cpuPercent)}%`);
+    }
+    if (hasMemory) {
+      details.push(
+        `Memory ${this.formatMemory(status.usedMemoryBytes, 2)} used ` +
+        `(${this.formatUsagePercent(memoryPercent)}%)`,
+        `${this.formatMemory(status.availableMemoryBytes, 2)} available of ` +
+        `${this.formatMemory(status.totalMemoryBytes, 2)}`);
+    }
+    const updated = this.parseUsageDate(status.updatedAt);
+    if (updated) {
+      details.push(`Updated ${updated.toLocaleString()}`);
+    }
+    this.systemStatus.title = details.join('\n');
+    this.systemStatus.setAttribute('aria-label', details.join('; ') || 'System resource usage unavailable');
+    this.systemStatus.replaceChildren(cpu, memory);
+  }
+
   private renderAgentProviderUsage(provider: AgentProviderUsage): HTMLElement {
     const item = document.createElement('button');
     item.type = 'button';
@@ -1329,9 +1383,10 @@ export class Workspace implements TerminalCallbacks {
       item.append(this.agentUsageText('Usage unavailable', 'agent-usage-message'));
     } else {
       for (const window of provider.windows) {
-        const value = Math.round(window.usedPercent);
-        const usage = this.agentUsageText(`${window.label} ${value}%`, 'agent-usage-window');
-        usage.classList.add(value >= 90 ? 'critical' : value >= 70 ? 'warning' : 'normal');
+        const value = Math.round(this.displayedUsagePercent(window.usedPercent));
+        const suffix = this.settings.indicators.showRemainingUsage ? '% left' : '%';
+        const usage = this.agentUsageText(`${window.label} ${value}${suffix}`, 'agent-usage-window');
+        usage.classList.add(this.usageSeverity(window.usedPercent));
         item.append(usage);
       }
     }
@@ -1436,7 +1491,7 @@ export class Workspace implements TerminalCallbacks {
       meters.className = 'agent-usage-tooltip-meters';
       for (const usageWindow of provider.windows) {
         const amount = usageWindow.used !== undefined && usageWindow.limit !== undefined
-          ? `${this.formatUsageAmount(usageWindow.used)} / ${this.formatUsageAmount(usageWindow.limit)}`
+          ? this.formatUsageAmountPair(usageWindow.used, usageWindow.limit)
           : undefined;
         this.appendUsageMeter(
           meters,
@@ -1471,7 +1526,7 @@ export class Workspace implements TerminalCallbacks {
           'Budget',
           100 - provider.budget.remainingPercent,
           provider.budget.resetsAt,
-          `${this.formatUsageAmount(provider.budget.used)} / ${this.formatUsageAmount(provider.budget.limit)}`);
+          this.formatUsageAmountPair(provider.budget.used, provider.budget.limit));
       }
       content.append(extras);
     }
@@ -1517,6 +1572,7 @@ export class Workspace implements TerminalCallbacks {
     resetsAt?: string,
     amount?: string
   ): void {
+    const displayedPercent = this.displayedUsagePercent(usedPercent);
     const meter = document.createElement('section');
     meter.className = 'agent-usage-tooltip-meter';
 
@@ -1530,20 +1586,23 @@ export class Workspace implements TerminalCallbacks {
     }
     heading.append(title);
     heading.append(this.agentUsageText(
-      `${this.formatUsagePercent(usedPercent)}%`,
+      this.formatDisplayedUsagePercent(usedPercent),
       `agent-usage-tooltip-percent ${this.usageSeverity(usedPercent)}`));
     meter.append(heading);
 
     const track = document.createElement('div');
     track.className = 'agent-usage-tooltip-track';
     track.role = 'progressbar';
-    track.setAttribute('aria-label', `${name} used`);
+    track.setAttribute(
+      'aria-label',
+      `${name} ${this.settings.indicators.showRemainingUsage ? 'remaining' : 'used'}`);
     track.setAttribute('aria-valuemin', '0');
     track.setAttribute('aria-valuemax', '100');
-    track.setAttribute('aria-valuenow', String(usedPercent));
+    track.setAttribute('aria-valuenow', String(displayedPercent));
+    track.setAttribute('aria-valuetext', this.formatDisplayedUsagePercent(usedPercent));
     const fill = document.createElement('div');
     fill.className = `agent-usage-tooltip-fill ${this.usageSeverity(usedPercent)}`;
-    fill.style.width = `${Math.min(100, Math.max(0, usedPercent))}%`;
+    fill.style.width = `${displayedPercent}%`;
     track.append(fill);
     meter.append(track);
 
@@ -1631,6 +1690,43 @@ export class Workspace implements TerminalCallbacks {
 
   private formatUsageAmount(value: number): string {
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  private displayedUsagePercent(usedPercent: number): number {
+    return this.settings.indicators.showRemainingUsage ? 100 - usedPercent : usedPercent;
+  }
+
+  private formatDisplayedUsagePercent(usedPercent: number): string {
+    const suffix = this.settings.indicators.showRemainingUsage ? ' remaining' : '';
+    return `${this.formatUsagePercent(this.displayedUsagePercent(usedPercent))}%${suffix}`;
+  }
+
+  private formatUsageAmountPair(used: number, limit: number): string {
+    if (this.settings.indicators.showRemainingUsage) {
+      const remaining = Math.max(0, limit - used);
+      return `${this.formatUsageAmount(remaining)} / ${this.formatUsageAmount(limit)} remaining`;
+    }
+    return `${this.formatUsageAmount(used)} / ${this.formatUsageAmount(limit)}`;
+  }
+
+  private formatMemory(bytes: number, fractionDigits = 1): string {
+    return `${this.formatMemoryValue(bytes, fractionDigits)} GB`;
+  }
+
+  private formatMemoryValue(bytes: number, fractionDigits = 1): string {
+    const gibibytes = bytes / 1024 ** 3;
+    return gibibytes.toLocaleString(undefined, {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits
+    });
+  }
+
+  private systemMetricSeverity(
+    value: number,
+    warningThreshold: number,
+    criticalThreshold: number
+  ): 'normal' | 'warning' | 'critical' {
+    return value >= criticalThreshold ? 'critical' : value >= warningThreshold ? 'warning' : 'normal';
   }
 
   private usageSeverity(value: number): 'normal' | 'warning' | 'critical' {

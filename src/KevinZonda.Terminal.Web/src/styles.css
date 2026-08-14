@@ -295,7 +295,7 @@ button {
   background: var(--terminal-background);
 }
 
-#agent-status-bar {
+#application-status-bar {
   z-index: 20;
   display: flex;
   grid-column: 1 / -1;
@@ -313,6 +313,40 @@ button {
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
+}
+
+#system-status,
+#agent-status-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+#system-status {
+  margin-right: auto;
+  transform: translateY(-1px);
+  font-variant-numeric: tabular-nums;
+}
+
+.system-metric {
+  color: var(--chrome-text-dim, #aab3c0);
+}
+
+.system-metric-cpu {
+  min-width: 49px;
+}
+
+.system-metric-memory {
+  min-width: 112px;
+}
+
+.system-metric.warning {
+  color: #ebcb8b;
+}
+
+.system-metric.critical {
+  color: #ff9da5;
 }
 
 .agent-status-idle {
@@ -338,11 +372,6 @@ button {
 
 .agent-usage:focus-visible {
   box-shadow: 0 0 0 1px var(--chrome-text-dim, #aab3c0);
-}
-
-.agent-usage + .agent-usage {
-  padding-left: 14px;
-  border-left: 1px solid var(--chrome-border, #303845);
 }
 
 .agent-usage-name {

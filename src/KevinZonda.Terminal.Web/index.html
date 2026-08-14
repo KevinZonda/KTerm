@@ -19,7 +19,10 @@
         <nav id="workspace-list" aria-label="Workspace list"></nav>
       </aside>
       <main id="workspace"></main>
-      <footer id="agent-status-bar" aria-label="Agent usage status"></footer>
+      <footer id="application-status-bar" aria-label="Application status">
+        <div id="system-status" aria-label="System resource usage"></div>
+        <div id="agent-status-bar" aria-label="Agent usage status"></div>
+      </footer>
       <div id="status" role="status" aria-live="polite"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>

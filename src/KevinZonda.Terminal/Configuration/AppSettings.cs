@@ -11,6 +11,8 @@ internal sealed record AppSettings
 
     public ThemeSettings Theme { get; init; } = new();
 
+    public IndicatorSettings Indicators { get; init; } = new();
+
     public ShellSettings Shell { get; init; } = new();
 
     internal static AppSettings Normalize(AppSettings? settings)
@@ -39,6 +41,7 @@ internal sealed record AppSettings
             {
                 Name = theme.Name
             },
+            Indicators = IndicatorSettings.Normalize(settings?.Indicators),
             Shell = ShellSettings.Normalize(settings?.Shell)
         };
     }
@@ -56,6 +59,16 @@ internal sealed record FontSettings
 internal sealed record ThemeSettings
 {
     public string Name { get; init; } = TerminalThemeCatalog.DefaultName;
+}
+
+internal sealed record IndicatorSettings
+{
+    public bool ShowRemainingUsage { get; init; }
+
+    internal static IndicatorSettings Normalize(IndicatorSettings? settings) => new()
+    {
+        ShowRemainingUsage = settings?.ShowRemainingUsage ?? false
+    };
 }
 
 internal sealed record ShellSettings

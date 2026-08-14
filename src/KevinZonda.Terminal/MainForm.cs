@@ -4,6 +4,7 @@ using System.Text.Json;
 using KevinZonda.Terminal.Configuration;
 using KevinZonda.Terminal.Interop;
 using KevinZonda.Terminal.Messaging;
+using KevinZonda.Terminal.Monitoring;
 using KevinZonda.Terminal.Terminal;
 using KevinZonda.Terminal.Usage;
 using Microsoft.Web.WebView2.Core;
@@ -23,6 +24,7 @@ internal sealed class MainForm : Form
     private readonly WebView2 _webView;
     private readonly TerminalSessionManager _sessions;
     private readonly AgentUsageStatusService _agentUsage;
+    private readonly SystemMetricsService _systemMetrics;
     private readonly SettingsStore _settingsStore = new();
     private AppSettings _settings;
     private WebViewBridge? _bridge;
@@ -36,6 +38,7 @@ internal sealed class MainForm : Form
         _settings = _settingsStore.Load();
         _sessions = new TerminalSessionManager(_settings, startingDirectory);
         _agentUsage = new AgentUsageStatusService(_sessions);
+        _systemMetrics = new SystemMetricsService();
         Text = "KevinZonda Terminal";
         BackColor = Color.FromArgb(12, 15, 20);
         ClientSize = new Size(1100, 720);
@@ -153,11 +156,13 @@ internal sealed class MainForm : Form
             _webView,
             _sessions,
             _agentUsage,
+            _systemMetrics,
             ShowSettings,
             OpenExternal,
             SaveFontSize,
             _settings);
         _agentUsage.Start();
+        _systemMetrics.Start();
 
         core.Navigate($"https://{AppHostName}/index.html");
     }
@@ -502,6 +507,7 @@ internal sealed class MainForm : Form
         _bridge?.Dispose();
         _bridge = null;
         await _agentUsage.DisposeAsync();
+        await _systemMetrics.DisposeAsync();
         await _sessions.DisposeAsync();
 
         if (_webView.CoreWebView2 is not null)
