@@ -723,16 +723,11 @@ button {
 
 .pane-tab-activate {
   padding: 0 8px;
-  cursor: grab;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   text-align: left;
   font-size: 12px;
-}
-
-.pane-tab.dragging .pane-tab-activate {
-  cursor: grabbing;
 }
 
 .pane-tab-close {
