@@ -301,10 +301,16 @@ export class Workspace implements TerminalCallbacks {
     };
 
     this.workspaces.push(workspace);
-    this.activeWorkspaceId = workspace.id;
-    this.renderSidebar();
-    this.render();
-    this.focusSession(session.sessionId);
+    // Keep the current workspace active; only jump to the new one when
+    // there is none (startup, or after the last workspace was closed).
+    if (this.activeWorkspaceId) {
+      this.renderSidebar();
+    } else {
+      this.activeWorkspaceId = workspace.id;
+      this.renderSidebar();
+      this.render();
+      this.focusSession(session.sessionId);
+    }
     this.setStatus('');
   }
 
@@ -439,6 +445,17 @@ export class Workspace implements TerminalCallbacks {
       peekItem.append(peekActivate);
       peekFragment.append(peekItem);
     }
+    const peekAdd = document.createElement('div');
+    peekAdd.className = 'workspace-peek-item workspace-peek-add';
+    const peekAddButton = document.createElement('button');
+    peekAddButton.type = 'button';
+    peekAddButton.className = 'workspace-peek-activate';
+    peekAddButton.textContent = '+';
+    peekAddButton.title = 'New workspace (Alt+N)';
+    peekAddButton.setAttribute('aria-label', 'New workspace');
+    peekAddButton.addEventListener('click', () => void this.createWorkspace());
+    peekAdd.append(peekAddButton);
+    peekFragment.append(peekAdd);
     this.workspaceList.replaceChildren(sidebarFragment);
     this.peekList.replaceChildren(peekFragment);
   }

@@ -231,6 +231,22 @@ button {
   transform: scale(0.88);
 }
 
+
+.workspace-peek-add {
+  border-style: dashed;
+  background: transparent;
+}
+
+.workspace-peek-add .workspace-peek-activate {
+  color: var(--chrome-text-dim, #aab3c0);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.workspace-peek-add:hover .workspace-peek-activate {
+  color: var(--chrome-text-bright, #eef2f6);
+}
+
 .workspace-activate {
   min-width: 0;
   padding: 0 8px;
