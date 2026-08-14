@@ -311,11 +311,13 @@ button {
   background: var(--chrome-bg, #171b22);
   border-top: 1px solid var(--chrome-border, #303845);
   font-size: 11px;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .agent-status-idle {
   opacity: 0.55;
+  transform: translateY(-1px);
 }
 
 .agent-usage {
@@ -323,6 +325,7 @@ button {
   min-width: 0;
   align-items: center;
   gap: 7px;
+  transform: translateY(-1px);
 }
 
 .agent-usage + .agent-usage {
