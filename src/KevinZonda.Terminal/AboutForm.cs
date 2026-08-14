@@ -15,6 +15,7 @@ internal sealed class AboutForm : Form
     private static readonly Color AccentColor = Color.FromArgb(136, 192, 208);
 
     private readonly List<Font> _ownedFonts = [];
+    private Image? _logoImage;
 
     internal AboutForm()
     {
@@ -33,12 +34,13 @@ internal sealed class AboutForm : Form
 
         var logo = new PictureBox
         {
-            Image = SystemIcons.Application.ToBitmap(),
+            Image = DefaultFormIcon(),
             Size = new Size(48, 48),
             SizeMode = PictureBoxSizeMode.CenterImage,
             Anchor = AnchorStyles.None,
             Margin = new Padding(0, 0, 0, 14)
         };
+        _logoImage = logo.Image;
 
         var nameLabel = new Label
         {
@@ -166,6 +168,13 @@ internal sealed class AboutForm : Form
         }
     }
 
+    // The classic WinForms default icon: grab it from a throwaway Form.
+    private static Image DefaultFormIcon()
+    {
+        using var holder = new Form();
+        return holder.Icon.ToBitmap();
+    }
+
     private Font OwnedFont(float size, FontStyle style)
     {
         var font = new Font(Font.FontFamily, size, style);
@@ -208,6 +217,8 @@ internal sealed class AboutForm : Form
             }
 
             _ownedFonts.Clear();
+            _logoImage?.Dispose();
+            _logoImage = null;
         }
     }
 }
