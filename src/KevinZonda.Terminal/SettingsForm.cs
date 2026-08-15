@@ -18,6 +18,7 @@ internal sealed class SettingsForm : Form
     private readonly Label _preview = new();
     private readonly ComboBox _themeName = new();
     private readonly Panel _themePreview = new();
+    private readonly CheckBox _showWorkspaceIndicator = new();
     private readonly CheckBox _showRemainingUsage = new();
     private readonly CheckBox _autoRenewKimiToken = new();
     private readonly TabControl _tabs = new();
@@ -68,6 +69,7 @@ internal sealed class SettingsForm : Form
         },
         Indicators = new IndicatorSettings
         {
+            ShowWorkspaceIndicator = _showWorkspaceIndicator.Checked,
             ShowRemainingUsage = _showRemainingUsage.Checked,
             AutoRenewKimiToken = _autoRenewKimiToken.Checked
         },
@@ -372,33 +374,49 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 6,
             BackColor = SurfaceColor,
             Margin = new Padding(0)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var index = 0; index < layout.RowCount; index++)
+        {
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        _showWorkspaceIndicator.AutoSize = true;
+        _showWorkspaceIndicator.Text = "Show workspace indicator";
+        _showWorkspaceIndicator.ForeColor = ForeColor;
+        _showWorkspaceIndicator.BackColor = SurfaceColor;
+        _showWorkspaceIndicator.Margin = new Padding(0, 0, 0, 8);
+        layout.Controls.Add(_showWorkspaceIndicator, 0, 0);
+
+        var workspaceDescription = CreateLabel(
+            "Display workspace shortcuts in the center of the status bar.");
+        workspaceDescription.ForeColor = Color.FromArgb(170, 179, 192);
+        workspaceDescription.AutoSize = true;
+        workspaceDescription.Margin = new Padding(22, 0, 0, 0);
+        layout.Controls.Add(workspaceDescription, 0, 1);
 
         _showRemainingUsage.AutoSize = true;
         _showRemainingUsage.Text = "Show remaining quota instead of used";
         _showRemainingUsage.ForeColor = ForeColor;
         _showRemainingUsage.BackColor = SurfaceColor;
-        _showRemainingUsage.Margin = new Padding(0, 0, 0, 8);
-        layout.Controls.Add(_showRemainingUsage, 0, 0);
+        _showRemainingUsage.Margin = new Padding(0, 18, 0, 8);
+        layout.Controls.Add(_showRemainingUsage, 0, 2);
 
         var description = CreateLabel(
             "Display remaining percentages for Codex and Kimi usage limits.");
         description.ForeColor = Color.FromArgb(170, 179, 192);
         description.AutoSize = true;
         description.Margin = new Padding(22, 0, 0, 0);
-        layout.Controls.Add(description, 0, 1);
+        layout.Controls.Add(description, 0, 3);
 
         _autoRenewKimiToken.AutoSize = true;
         _autoRenewKimiToken.Text = "Auto renew Kimi token";
         _autoRenewKimiToken.ForeColor = ForeColor;
         _autoRenewKimiToken.BackColor = SurfaceColor;
         _autoRenewKimiToken.Margin = new Padding(0, 18, 0, 8);
-        layout.Controls.Add(_autoRenewKimiToken, 0, 2);
+        layout.Controls.Add(_autoRenewKimiToken, 0, 4);
 
         var renewDescription = CreateLabel(
             "Refresh the Kimi CLI OAuth token in memory only. Credential files are never modified.");
@@ -406,7 +424,7 @@ internal sealed class SettingsForm : Form
         renewDescription.AutoSize = true;
         renewDescription.MaximumSize = new Size(430, 0);
         renewDescription.Margin = new Padding(22, 0, 0, 0);
-        layout.Controls.Add(renewDescription, 0, 3);
+        layout.Controls.Add(renewDescription, 0, 5);
 
         page.Controls.Add(layout);
         return page;
@@ -497,6 +515,7 @@ internal sealed class SettingsForm : Form
                 _themeName.SelectedIndex = 0;
             }
 
+            _showWorkspaceIndicator.Checked = normalized.Indicators.ShowWorkspaceIndicator;
             _showRemainingUsage.Checked = normalized.Indicators.ShowRemainingUsage;
             _autoRenewKimiToken.Checked = normalized.Indicators.AutoRenewKimiToken;
             ApplyShellValues(normalized.Shell);

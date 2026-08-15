@@ -752,6 +752,10 @@ export class Workspace implements TerminalCallbacks {
     const usageDisplayChanged =
       this.settings.indicators.showRemainingUsage !== settings.indicators.showRemainingUsage;
     this.settings = settings;
+    this.workspaceIndicator.hidden = !settings.indicators.showWorkspaceIndicator;
+    if (settings.indicators.showWorkspaceIndicator) {
+      this.revealActiveWorkspaceIndicator();
+    }
     applyTerminalThemeToDocument(settings.theme.name);
     this.terminals.forEach(terminal => {
       terminal.applyFontSettings(settings.font);

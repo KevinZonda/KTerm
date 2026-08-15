@@ -23,6 +23,7 @@ export interface ThemeSettings {
 }
 
 export interface IndicatorSettings {
+  showWorkspaceIndicator: boolean;
   showRemainingUsage: boolean;
   autoRenewKimiToken: boolean;
 }
@@ -95,6 +96,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     name: DEFAULT_THEME_NAME
   },
   indicators: {
+    showWorkspaceIndicator: true,
     showRemainingUsage: false,
     autoRenewKimiToken: false
   }
@@ -209,6 +211,7 @@ export class NativeBridge {
       font: { family, size, lineHeight },
       theme: { name: normalizeTerminalThemeName(theme.name) },
       indicators: {
+        showWorkspaceIndicator: indicators.showWorkspaceIndicator !== false,
         showRemainingUsage: indicators.showRemainingUsage === true,
         autoRenewKimiToken: indicators.autoRenewKimiToken === true
       }

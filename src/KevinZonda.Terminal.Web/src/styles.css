@@ -325,16 +325,19 @@ button {
 }
 
 #system-status {
+  grid-column: 1;
   justify-self: start;
   transform: translateY(-1px);
   font-variant-numeric: tabular-nums;
 }
 
 #agent-status-bar {
+  grid-column: 3;
   justify-self: end;
 }
 
 #workspace-indicator {
+  grid-column: 2;
   position: relative;
   display: flex;
   max-width: min(36vw, 360px);
@@ -349,6 +352,10 @@ button {
 }
 
 #workspace-indicator::-webkit-scrollbar {
+  display: none;
+}
+
+#workspace-indicator[hidden] {
   display: none;
 }
 

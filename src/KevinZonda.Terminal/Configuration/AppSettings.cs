@@ -63,12 +63,15 @@ internal sealed record ThemeSettings
 
 internal sealed record IndicatorSettings
 {
+    public bool ShowWorkspaceIndicator { get; init; } = true;
+
     public bool ShowRemainingUsage { get; init; }
 
     public bool AutoRenewKimiToken { get; init; }
 
     internal static IndicatorSettings Normalize(IndicatorSettings? settings) => new()
     {
+        ShowWorkspaceIndicator = settings?.ShowWorkspaceIndicator ?? true,
         ShowRemainingUsage = settings?.ShowRemainingUsage ?? false,
         AutoRenewKimiToken = settings?.AutoRenewKimiToken ?? false
     };
