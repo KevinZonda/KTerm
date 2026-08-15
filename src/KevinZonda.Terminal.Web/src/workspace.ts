@@ -63,6 +63,7 @@ export class Workspace implements TerminalCallbacks {
   private readonly app: HTMLElement;
   private readonly workspace: HTMLElement;
   private readonly systemStatus: HTMLElement;
+  private readonly workspaceIndicator: HTMLElement;
   private readonly agentStatusBar: HTMLElement;
   private readonly agentUsageTooltip: HTMLElement;
   private readonly peekRail: HTMLElement;
@@ -96,6 +97,7 @@ export class Workspace implements TerminalCallbacks {
     this.app = this.requireElement('app');
     this.workspace = this.requireElement('workspace');
     this.systemStatus = this.requireElement('system-status');
+    this.workspaceIndicator = this.requireElement('workspace-indicator');
     this.agentStatusBar = this.requireElement('agent-status-bar');
     this.agentUsageTooltip = document.createElement('div');
     this.agentUsageTooltip.id = 'agent-usage-tooltip';
@@ -443,6 +445,7 @@ export class Workspace implements TerminalCallbacks {
   private renderSidebar(): void {
     const sidebarFragment = document.createDocumentFragment();
     const peekFragment = document.createDocumentFragment();
+    const indicatorFragment = document.createDocumentFragment();
     for (const workspace of this.workspaces) {
       const item = document.createElement('div');
       item.className = 'workspace-item';
@@ -491,6 +494,19 @@ export class Workspace implements TerminalCallbacks {
       peekActivate.addEventListener('click', () => this.activateWorkspace(workspace.id));
       peekItem.append(peekActivate);
       peekFragment.append(peekItem);
+
+      const indicator = document.createElement('button');
+      indicator.type = 'button';
+      indicator.className = 'workspace-indicator-item';
+      indicator.dataset.workspaceId = workspace.id;
+      indicator.classList.toggle('active', workspace.id === this.activeWorkspaceId);
+      indicator.title = workspace.name;
+      indicator.setAttribute('aria-label', workspace.name);
+      if (workspace.id === this.activeWorkspaceId) {
+        indicator.setAttribute('aria-current', 'page');
+      }
+      indicator.addEventListener('click', () => this.activateWorkspace(workspace.id));
+      indicatorFragment.append(indicator);
     }
     const peekAdd = document.createElement('div');
     peekAdd.className = 'workspace-peek-item workspace-peek-add';
@@ -505,6 +521,8 @@ export class Workspace implements TerminalCallbacks {
     peekFragment.append(peekAdd);
     this.workspaceList.replaceChildren(sidebarFragment);
     this.peekList.replaceChildren(peekFragment);
+    this.workspaceIndicator.replaceChildren(indicatorFragment);
+    this.revealActiveWorkspaceIndicator();
   }
 
   private updateSidebarSelection(): void {
@@ -513,6 +531,31 @@ export class Workspace implements TerminalCallbacks {
         item.classList.toggle('active', item.dataset.workspaceId === this.activeWorkspaceId);
       });
     });
+    this.workspaceIndicator.querySelectorAll<HTMLElement>('.workspace-indicator-item').forEach(item => {
+      const isActive = item.dataset.workspaceId === this.activeWorkspaceId;
+      item.classList.toggle('active', isActive);
+      if (isActive) {
+        item.setAttribute('aria-current', 'page');
+      } else {
+        item.removeAttribute('aria-current');
+      }
+    });
+    this.revealActiveWorkspaceIndicator();
+  }
+
+  private revealActiveWorkspaceIndicator(): void {
+    const active = this.workspaceIndicator.querySelector<HTMLElement>('.workspace-indicator-item.active');
+    if (!active) {
+      return;
+    }
+
+    const left = active.offsetLeft;
+    const right = left + active.offsetWidth;
+    if (left < this.workspaceIndicator.scrollLeft) {
+      this.workspaceIndicator.scrollLeft = left;
+    } else if (right > this.workspaceIndicator.scrollLeft + this.workspaceIndicator.clientWidth) {
+      this.workspaceIndicator.scrollLeft = right - this.workspaceIndicator.clientWidth;
+    }
   }
 
   private startWorkspaceRename(workspaceId: string): void {

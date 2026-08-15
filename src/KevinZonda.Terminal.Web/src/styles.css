@@ -297,14 +297,14 @@ button {
 
 #application-status-bar {
   z-index: 20;
-  display: flex;
+  display: grid;
   grid-column: 1 / -1;
   grid-row: 2;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   min-width: 0;
   min-height: 25px;
   align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
+  gap: 8px;
   padding: 0 9px;
   overflow: hidden;
   color: var(--chrome-text-dim, #aab3c0);
@@ -321,12 +321,75 @@ button {
   min-width: 0;
   align-items: center;
   gap: 14px;
+  overflow: hidden;
 }
 
 #system-status {
-  margin-right: auto;
+  justify-self: start;
   transform: translateY(-1px);
   font-variant-numeric: tabular-nums;
+}
+
+#agent-status-bar {
+  justify-self: end;
+}
+
+#workspace-indicator {
+  position: relative;
+  display: flex;
+  max-width: min(36vw, 360px);
+  height: 24px;
+  min-width: 0;
+  align-items: center;
+  justify-self: center;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+#workspace-indicator::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-indicator-item {
+  display: inline-flex;
+  flex: 0 0 13px;
+  width: 13px;
+  height: 24px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+.workspace-indicator-item::before {
+  width: 8px;
+  height: 8px;
+  content: '';
+  background: transparent;
+  border: 1px solid var(--chrome-border, #303845);
+  border-radius: 2px;
+}
+
+.workspace-indicator-item:hover::before,
+.workspace-indicator-item:focus-visible::before {
+  background: var(--chrome-raised, #202630);
+  border-color: var(--chrome-text-dim, #aab3c0);
+}
+
+.workspace-indicator-item.active::before {
+  background: var(--chrome-active, #29313d);
+  border-color: var(--chrome-text-bright, #eef2f6);
+}
+
+.workspace-indicator-item:focus-visible::before {
+  box-shadow: 0 0 0 1px var(--chrome-text-dim, #aab3c0);
 }
 
 .system-metric {
