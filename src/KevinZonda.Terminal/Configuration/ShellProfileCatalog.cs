@@ -5,11 +5,19 @@ internal sealed record ShellProfileDefinition(
     string DisplayName,
     string DefaultArguments);
 
+internal sealed record Msys2EnvironmentDefinition(
+    string Id,
+    string DisplayName)
+{
+    public override string ToString() => DisplayName;
+}
+
 internal sealed record ShellLaunchSpec(
     string DisplayName,
     string ExecutablePath,
     string Arguments,
-    IReadOnlyDictionary<string, string>? Environment = null);
+    IReadOnlyDictionary<string, string>? Environment = null,
+    IReadOnlySet<string>? RemovedEnvironmentVariables = null);
 
 internal static class ShellProfileCatalog
 {
@@ -20,15 +28,17 @@ internal static class ShellProfileCatalog
     internal const string Msys2ZshId = "msys2-zsh";
     internal const string GitBashId = "git-bash";
     internal const string CustomId = "custom";
+    internal const string NoMsys2Environment = "none";
     internal const string DefaultMsys2Environment = "UCRT64";
 
-    internal static IReadOnlyList<string> Msys2Environments { get; } =
+    internal static IReadOnlyList<Msys2EnvironmentDefinition> Msys2Environments { get; } =
     [
-        DefaultMsys2Environment,
-        "CLANG64",
-        "CLANGARM64",
-        "MINGW64",
-        "MSYS"
+        new(NoMsys2Environment, "None (do not set MSYSTEM)"),
+        new(DefaultMsys2Environment, DefaultMsys2Environment),
+        new("CLANG64", "CLANG64"),
+        new("CLANGARM64", "CLANGARM64"),
+        new("MINGW64", "MINGW64"),
+        new("MSYS", "MSYS")
     ];
 
     internal static IReadOnlyList<ShellProfileDefinition> All { get; } =
@@ -47,10 +57,13 @@ internal static class ShellProfileCatalog
             profile => string.Equals(profile.Id, id, StringComparison.OrdinalIgnoreCase))
         ?? All[0];
 
-    internal static string NormalizeMsys2Environment(string? environment) =>
+    internal static Msys2EnvironmentDefinition FindMsys2Environment(string? environment) =>
         Msys2Environments.FirstOrDefault(
-            candidate => string.Equals(candidate, environment, StringComparison.OrdinalIgnoreCase))
-        ?? DefaultMsys2Environment;
+            candidate => string.Equals(candidate.Id, environment, StringComparison.OrdinalIgnoreCase))
+        ?? Msys2Environments.First(candidate => candidate.Id == DefaultMsys2Environment);
+
+    internal static string NormalizeMsys2Environment(string? environment) =>
+        FindMsys2Environment(environment).Id;
 
     internal static ShellLaunchSpec Resolve(ShellSettings settings)
     {
@@ -70,15 +83,27 @@ internal static class ShellProfileCatalog
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["MSYSTEM"] = settings.Msys2Environment,
             ["CHERE_INVOKING"] = "1"
         };
+        IReadOnlySet<string>? removedEnvironmentVariables = null;
+        if (settings.Msys2Environment == NoMsys2Environment)
+        {
+            removedEnvironmentVariables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "MSYSTEM"
+            };
+        }
+        else
+        {
+            environment["MSYSTEM"] = settings.Msys2Environment;
+        }
+
         if (settings.InheritWindowsPath)
         {
             environment["MSYS2_PATH_TYPE"] = "inherit";
         }
 
-        return Create(profile, settings, environment);
+        return Create(profile, settings, environment, removedEnvironmentVariables);
     }
 
     private static ShellLaunchSpec ResolveAuto()
@@ -126,7 +151,8 @@ internal static class ShellProfileCatalog
     private static ShellLaunchSpec Create(
         ShellProfileDefinition profile,
         ShellSettings settings,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        IReadOnlySet<string>? removedEnvironmentVariables = null)
     {
         var executable = ResolveManualExecutable(settings.Executable);
         if (executable is null || !File.Exists(executable))
@@ -138,7 +164,8 @@ internal static class ShellProfileCatalog
             profile.DisplayName,
             executable,
             settings.Arguments ?? profile.DefaultArguments,
-            environment);
+            environment,
+            removedEnvironmentVariables);
     }
 
     private static string? ResolveManualExecutable(string? configured)

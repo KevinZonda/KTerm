@@ -496,7 +496,8 @@ internal sealed class SettingsForm : Form
     {
         _msys2Environment.Items.AddRange(
             ShellProfileCatalog.Msys2Environments.Cast<object>().ToArray());
-        _msys2Environment.SelectedItem = ShellProfileCatalog.DefaultMsys2Environment;
+        _msys2Environment.SelectedItem = ShellProfileCatalog.FindMsys2Environment(
+            ShellProfileCatalog.DefaultMsys2Environment);
         _inheritWindowsPath.Checked = true;
     }
 
@@ -541,7 +542,8 @@ internal sealed class SettingsForm : Form
                 ? string.Empty
                 : settings.Executable ?? string.Empty;
             _shellArguments.Text = settings.Arguments ?? profile.DefaultArguments;
-            _msys2Environment.SelectedItem = settings.Msys2Environment;
+            _msys2Environment.SelectedItem = ShellProfileCatalog.FindMsys2Environment(
+                settings.Msys2Environment);
             _inheritWindowsPath.Checked = settings.InheritWindowsPath;
             _shellExecutable.ReadOnly = profile.Id == ShellProfileCatalog.AutoId;
             _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
@@ -588,7 +590,8 @@ internal sealed class SettingsForm : Form
             Arguments = profile.Id == ShellProfileCatalog.AutoId
                 ? null
                 : _shellArguments.Text,
-            Msys2Environment = _msys2Environment.Text,
+            Msys2Environment = (_msys2Environment.SelectedItem as Msys2EnvironmentDefinition)?.Id
+                ?? ShellProfileCatalog.DefaultMsys2Environment,
             InheritWindowsPath = _inheritWindowsPath.Checked
         };
     }

@@ -274,6 +274,14 @@ internal sealed class TerminalSession : IAsyncDisposable
             }
         }
 
+        if (shell.RemovedEnvironmentVariables is not null)
+        {
+            foreach (var variable in shell.RemovedEnvironmentVariables)
+            {
+                environment.Remove(variable);
+            }
+        }
+
         environment["TERM"] = "xterm-256color";
         environment["COLORTERM"] = "truecolor";
         var block = string.Join('\0', environment.Select(variable => $"{variable.Key}={variable.Value}"))
