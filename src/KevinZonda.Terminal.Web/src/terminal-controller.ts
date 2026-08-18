@@ -72,8 +72,18 @@ export class TerminalController {
       fontFamily: font.family,
       fontSize: font.size,
       lineHeight: font.lineHeight,
+      linkHandler: {
+        activate: (_event, uri) => this.bridge.openExternal(uri)
+      },
       scrollback: 5000,
-      theme: resolveTerminalTheme(theme.name)
+      theme: resolveTerminalTheme(theme.name),
+      // We always sit behind ConPTY (OpenConsole passthrough), so adopt its
+      // buffer semantics on resize instead of vanilla xterm behavior:
+      // growing rows pads empty lines at the bottom of the viewport rather
+      // than pulling scrollback back in, and a buildNumber below 21376
+      // disables xterm's own reflow so the screen always follows the pty's
+      // repaint instead of a second, diverging reflow.
+      windowsPty: { backend: 'conpty', buildNumber: 19045 }
     });
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.loadAddon(new WebLinksAddon((_event, uri) => this.bridge.openExternal(uri)));
