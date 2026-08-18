@@ -15,6 +15,8 @@ internal sealed record AppSettings
 
     public ShellSettings Shell { get; init; } = new();
 
+    public ConHostSettings ConHost { get; init; } = new();
+
     internal static AppSettings Normalize(AppSettings? settings)
     {
         var font = settings?.Font ?? new FontSettings();
@@ -42,9 +44,24 @@ internal sealed record AppSettings
                 Name = theme.Name
             },
             Indicators = IndicatorSettings.Normalize(settings?.Indicators),
-            Shell = ShellSettings.Normalize(settings?.Shell)
+            Shell = ShellSettings.Normalize(settings?.Shell),
+            ConHost = ConHostSettings.Normalize(settings?.ConHost)
         };
     }
+}
+
+internal sealed record ConHostSettings
+{
+    // The enhanced OpenConsole build (tools/openconsole/OpenConsole.Enhanced.exe,
+    // KTerm patch from docs/OpenCon.FixB.md) additionally repaints the viewport
+    // when an application stays silent after a resize, restoring content that
+    // xterm.js lost when it truncated narrowed lines.
+    public bool EnhancedOpenConsole { get; init; }
+
+    internal static ConHostSettings Normalize(ConHostSettings? settings) => new()
+    {
+        EnhancedOpenConsole = settings?.EnhancedOpenConsole ?? false
+    };
 }
 
 internal sealed record FontSettings

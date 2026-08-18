@@ -83,7 +83,8 @@ internal sealed class TerminalSession : IAsyncDisposable
         int rows,
         ShellLaunchSpec shell,
         TerminalThemePreset theme,
-        string startingDirectory)
+        string startingDirectory,
+        bool enhancedOpenConsole)
     {
         columns = Math.Clamp(columns, 2, short.MaxValue);
         rows = Math.Clamp(rows, 1, short.MaxValue);
@@ -111,7 +112,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         try
         {
-            conHost = ConHost.Create(columns, rows, pseudoInput, pseudoOutput);
+            conHost = ConHost.Create(columns, rows, pseudoInput, pseudoOutput, enhancedOpenConsole);
 
             pseudoInput.Dispose();
             pseudoOutput.Dispose();

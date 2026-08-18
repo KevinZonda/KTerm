@@ -82,3 +82,59 @@ scrollback 由 DECSTBM 直通维护（`conhost.md` 主线修复），本方案�
   与 OpenConsole buffer **逐格一致**，无残影、无留白、无闪烁（重绘
   帧即最终内容）。
 - 与 WT 并排对比同一操作序列的最终画面。
+
+## 8. 实施结果（2026-08，已落地为 OpenConsole.Enhanced.exe）
+
+最终实现在 `../terminal`（WT 源码树，未提交）：
+
+- 新增 `src/host/ConptyRepaint.cpp/.hpp`：`EmitViewportRepaint()` 把
+  当前视口序列化为 VT 帧（CUP 逐行 + 全保真 SGR 属性映射 + BCE 行尾
+  擦除），附带一个全局"ConPTY 输出提交计数器"。
+- 改 `src/host/PtySignalInputThread.cpp/.hpp`：`_DoResizeWindow` 加
+  **活动门控**；`_DrainPendingResizes` 合并连续 resize；
+  `_HasPendingResize` 查询。
+- 改 `src/host/VtIo.cpp`：`Writer::Submit` 里
+  `NoteConptyOutputSubmitted()` 递增计数器；`formatAttributes` 扩展为
+  全保真。
+
+### 迭代过程
+
+- **v1：resize 后立即无条件全屏重绘。** 结果：拖动 resize 期间应用
+  还在持续输出，重绘帧与应用输出交错，屏幕被旧几何的 BCE 背景淹没
+  （"青色洪水"）。结论：重绘时机错了，比不画更糟。
+- **v2：重绘帧对空白行补 `\x1b[0m\x1b[K` 擦除。** 离线模拟改善，但
+  真机仍有碎片行——根因同样是时机，不是擦除不干净。
+- **v3（最终）：活动门控。** resize 后先放锁等 350ms，用
+  `VtIo::Writer::Submit` 的全局计数器判断应用是否沉默：应用仍在输出
+  则放弃本次重绘（让应用自己的增量重绘主导），应用沉默才 dump 一帧；
+  等待期间来了新 resize 也放弃，由最后一次尺寸触发新一轮门控。
+
+### WT 对照结论
+
+- WT 拖动中干净靠的是 client/server 共享 `ResizeWithReflow`（见
+  `OpenCon.md` 第 3 节），不是 ConPTY 发了什么；
+- Ctrl+C 后 WT 同样会露出碎片——即"应用不重绘时残留"在 WT 也存在，
+  增强版在这个场景反而优于 WT。
+
+### 离线验证（emulator）
+
+`../dump/` 下的 `conpty-dump`（C# ConPTY 桥）+ `emulate.mjs`
+（node + @xterm/headless，`windowsPty:{backend:'conpty',buildNumber:19045}`）
+双场景验证：
+
+- 进度条场景（应用持续输出）：v3 与原版行为完全一致，干净收敛——
+  门控正确放弃了所有重绘。
+- 静态长行场景（应用沉默）：内容按新宽度完整折行恢复。
+
+### KTerm 侧分发
+
+补丁版以 `OpenConsole.Enhanced.exe` 与官方原版 `OpenConsole.exe` 一并
+嵌入（`tools/openconsole/`），默认不启用：
+
+- 设置 → Shell → "Enable enhanced OpenConsole"（新开标签页生效）；
+- `KTERM_CONHOST=enhanced` 强制增强版；`KTERM_CONHOST=kernel` 强制
+  系统 conhost；
+- 回退链：enhanced（如选）→ stock OpenConsole → 系统 conhost。
+
+真机回归（`make run` 三项：进度条 resize / 长列表 resize /
+codex resume）待确认。

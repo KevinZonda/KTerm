@@ -28,6 +28,7 @@ internal sealed class SettingsForm : Form
     private readonly Button _shellBrowse = new();
     private readonly ComboBox _msys2Environment = new();
     private readonly CheckBox _inheritWindowsPath = new();
+    private readonly CheckBox _enhancedOpenConsole = new();
     private readonly List<Font> _previewFonts = [];
     private TabPage? _shellPage;
     private bool _applyingValues;
@@ -73,7 +74,11 @@ internal sealed class SettingsForm : Form
             ShowRemainingUsage = _showRemainingUsage.Checked,
             AutoRenewKimiToken = _autoRenewKimiToken.Checked
         },
-        Shell = SelectedShellSettings()
+        Shell = SelectedShellSettings(),
+        ConHost = new ConHostSettings
+        {
+            EnhancedOpenConsole = _enhancedOpenConsole.Checked
+        }
     });
 
     protected override void OnHandleCreated(EventArgs eventArgs)
@@ -248,11 +253,11 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 1,
-            RowCount = 9,
+            RowCount = 11,
             BackColor = SurfaceColor,
             Margin = new Padding(0)
         };
-        for (var row = 0; row < 9; row++)
+        for (var row = 0; row < 11; row++)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
@@ -308,6 +313,19 @@ internal sealed class SettingsForm : Form
         _inheritWindowsPath.Margin = new Padding(0);
         _inheritWindowsPath.UseVisualStyleBackColor = false;
         layout.Controls.Add(_inheritWindowsPath, 0, 8);
+
+        _enhancedOpenConsole.AutoSize = true;
+        _enhancedOpenConsole.Text = "Enable enhanced OpenConsole (repaints static screen content after resize)";
+        _enhancedOpenConsole.BackColor = SurfaceColor;
+        _enhancedOpenConsole.ForeColor = Color.FromArgb(216, 222, 233);
+        _enhancedOpenConsole.Margin = new Padding(0);
+        _enhancedOpenConsole.UseVisualStyleBackColor = false;
+        layout.Controls.Add(_enhancedOpenConsole, 0, 9);
+
+        var conHostHint = CreateLabel(
+            "Applies to new terminal tabs. Set KTERM_CONHOST=kernel to force the system console.");
+        conHostHint.ForeColor = Color.FromArgb(140, 148, 160);
+        layout.Controls.Add(conHostHint, 0, 10);
 
         page.Controls.Add(layout);
         return page;
@@ -519,6 +537,7 @@ internal sealed class SettingsForm : Form
             _showWorkspaceIndicator.Checked = normalized.Indicators.ShowWorkspaceIndicator;
             _showRemainingUsage.Checked = normalized.Indicators.ShowRemainingUsage;
             _autoRenewKimiToken.Checked = normalized.Indicators.AutoRenewKimiToken;
+            _enhancedOpenConsole.Checked = normalized.ConHost.EnhancedOpenConsole;
             ApplyShellValues(normalized.Shell);
         }
         finally

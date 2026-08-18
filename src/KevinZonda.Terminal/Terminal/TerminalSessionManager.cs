@@ -44,7 +44,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
                 rows,
                 ShellProfileCatalog.Resolve(settings.Shell),
                 TerminalThemeCatalog.Find(settings.Theme.Name),
-                _startingDirectory));
+                _startingDirectory,
+                settings.ConHost.EnhancedOpenConsole));
         }
     }
 
@@ -62,7 +63,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
                 rows,
                 ShellProfileCatalog.Resolve(settings.Shell),
                 TerminalThemeCatalog.Find(settings.Theme.Name),
-                _startingDirectory)).ConfigureAwait(false);
+                _startingDirectory,
+                settings.ConHost.EnhancedOpenConsole)).ConfigureAwait(false);
 
         if (Volatile.Read(ref _disposed) != 0)
         {
@@ -112,7 +114,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
         Task<TerminalSession>? previousPrewarm;
         lock (_prewarmLock)
         {
-            if (_settings.Shell == settings.Shell && _settings.Theme == settings.Theme)
+            if (_settings.Shell == settings.Shell && _settings.Theme == settings.Theme &&
+                _settings.ConHost == settings.ConHost)
             {
                 return;
             }

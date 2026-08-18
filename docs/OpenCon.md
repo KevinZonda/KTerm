@@ -4,9 +4,11 @@
 与 `conhost.md` 的主线问题（scrollback 丢失）同源：都是**客户端本地 buffer
 语义与 ConPTY buffer 语义冲突**，那次是 scrollback，这次是 resize。
 
-修复方案另见：`OpenCon.FixA.md`（缓解：settle 后清视口）、
-`OpenCon.FixB.md`（终极：自编译 OpenConsole，resize 后合成全屏重绘；
-对应调查分析中的"方案 C"）。
+修复方案另见：`OpenCon.FixA.md`（缓解：settle 后清视口——**已验证为
+错误方向并被否决回滚**，见该文件；xterm.js 6.0 的 `\x1b[2J` 只擦视口
+不动 scrollback，清视口反而丢内容）、`OpenCon.FixB.md`（终极：自编译
+OpenConsole，resize 后合成全屏重绘；对应调查分析中的"方案 C"——
+**已落地为 `OpenConsole.Enhanced.exe`**，见该文件第 8 节）。
 
 ## 1. 现象
 
@@ -113,9 +115,9 @@ xterm 的 reflow 与 conhost 的 reflow 是两套不同算法，两边都重排�
 
 | 方案 | 内容 | 成本 | 效果 |
 |---|---|---|---|
-| A（`OpenCon.FixA.md`） | resize settle 后在 xterm 本地清视口，残影变临时空白，等应用下一帧填回 | 小 | 残影不再"永久错误"，codex 零影响；PowerShell 下 prompt 上方留白至下次输出 |
+| A（`OpenCon.FixA.md`） | resize settle 后在 xterm 本地清视口，残影变临时空白，等应用下一帧填回 | 小 | **已否决**：`\x1b[2J` 只擦视口，静态内容被清掉后无人重绘，比残影更糟；代码已回滚 |
 | B | 让 xterm 完全模拟 conhost reflow | 不可行 | xterm 无同款算法 |
-| C（`OpenCon.FixB.md`） | 自编译 OpenConsole 打补丁，resize 后合成全屏 VT 重绘 | 大（维护 fork） | 真正逐格同步 |
+| C（`OpenCon.FixB.md`） | 自编译 OpenConsole 打补丁，resize 后合成全屏 VT 重绘 | 大（维护 fork） | 真正逐格同步；**已实现**（活动门控版），打包为 `OpenConsole.Enhanced.exe`，默认关 |
 | D | 不动 | 0 | 残影在下次 clear / 全屏重绘时自愈；codex 场景已无感 |
 
 同类问题在 VSCode 终端（同为 xterm.js + ConPTY）同样存在，属 ConPTY

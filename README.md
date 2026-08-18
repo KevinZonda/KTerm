@@ -36,7 +36,7 @@ KevinZonda Terminal 是一个面向 Windows 的最小化 Terminal Emulator MVP�
 - .NET 10 SDK
 - Node.js 与 pnpm
 - Microsoft Edge WebView2 Evergreen Runtime
-- （可选）`tools/openconsole/OpenConsole.exe`：passthrough ConPTY 主机，构建时嵌入程序集，首次运行释放到 `%LOCALAPPDATA%\KTerm\bin`；缺失或释放失败时自动回退系统 conhost
+- （可选）`tools/openconsole/OpenConsole.exe`：passthrough ConPTY 主机，构建时嵌入程序集，首次运行释放到 `%LOCALAPPDATA%\KTerm\bin`；缺失或释放失败时自动回退系统 conhost。另有 `OpenConsole.Enhanced.exe`（KTerm 补丁版，resize 后在应用沉默时重绘静态屏幕内容），随附嵌入、默认不启用——在设置 → Shell 勾选 "Enable enhanced OpenConsole"（对新标签页生效），或用环境变量 `KTERM_CONHOST=enhanced` 强制启用、`KTERM_CONHOST=kernel` 强制系统 conhost
 
 ```powershell
 dotnet build KevinZonda.Terminal.slnx

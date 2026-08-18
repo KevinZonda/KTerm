@@ -33,10 +33,17 @@
 
   <!-- Passthrough ConPTY host (from Windows Terminal, MIT), embedded into the
        assembly and extracted on first use so single-file publish stays single.
-       When the resource is absent, sessions fall back to the inbox conhost. -->
+       When the resource is absent, sessions fall back to the inbox conhost.
+       OpenConsole.Enhanced.exe is the KTerm-patched build (docs/OpenCon.FixB.md)
+       that additionally repaints the viewport after a silent resize. -->
   <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe')">
     <EmbeddedResource Include="$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.exe">
       <LogicalName>KevinZonda.Terminal.Binaries/OpenConsole.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.Enhanced.exe')">
+    <EmbeddedResource Include="$(MSBuildProjectDirectory)\..\..\tools\openconsole\OpenConsole.Enhanced.exe">
+      <LogicalName>KevinZonda.Terminal.Binaries/OpenConsole.Enhanced.exe</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

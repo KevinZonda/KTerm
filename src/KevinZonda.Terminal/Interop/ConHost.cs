@@ -8,35 +8,65 @@ namespace KevinZonda.Terminal.Interop;
 /// Picks the best available pseudoconsole host. A side-by-side OpenConsole.exe
 /// (passthrough ConPTY) is preferred because the inbox conhost on Windows 10
 /// consumes VT sequences and repaints instead of forwarding them; the inbox
-/// host is the fallback. Set KTERM_CONHOST=kernel to force the fallback.
+/// host is the fallback. Two OpenConsole builds ship as embedded resources:
+/// the stock Windows Terminal build (OpenConsole.exe) and the KTerm-patched
+/// build (OpenConsole.Enhanced.exe, see docs/OpenCon.FixB.md) which repaints
+/// the viewport when an application stays silent after a resize.
+/// Set KTERM_CONHOST=kernel to force the inbox host, or KTERM_CONHOST=enhanced
+/// to force the enhanced build regardless of the setting.
 /// </summary>
 internal static class ConHost
 {
-    internal static IConHost Create(int columns, int rows, SafeFileHandle input, SafeFileHandle output)
+    private const string StockFileName = "OpenConsole.exe";
+    private const string EnhancedFileName = "OpenConsole.Enhanced.exe";
+
+    internal static IConHost Create(int columns, int rows, SafeFileHandle input, SafeFileHandle output, bool preferEnhanced)
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("KTERM_CONHOST"), "kernel", StringComparison.OrdinalIgnoreCase))
+        var forced = Environment.GetEnvironmentVariable("KTERM_CONHOST");
+        if (!string.Equals(forced, "kernel", StringComparison.OrdinalIgnoreCase))
         {
-            var hostPath = FindOpenConsole();
-            if (hostPath is not null)
+            if (preferEnhanced || string.Equals(forced, "enhanced", StringComparison.OrdinalIgnoreCase))
             {
-                try
+                var enhanced = TryCreateOpenConsole(columns, rows, input, output, EnhancedFileName);
+                if (enhanced is not null)
                 {
-                    return OpenConsoleConHost.Create(columns, rows, input, output, hostPath);
+                    return enhanced;
                 }
-                catch (Exception error)
-                {
-                    System.Diagnostics.Debug.WriteLine($"OpenConsole host unavailable, falling back to inbox conhost: {error}");
-                }
+            }
+
+            var stock = TryCreateOpenConsole(columns, rows, input, output, StockFileName);
+            if (stock is not null)
+            {
+                return stock;
             }
         }
 
         return KernelConHost.Create(columns, rows, input, output);
     }
 
-    private static string? FindOpenConsole()
+    private static IConHost? TryCreateOpenConsole(int columns, int rows, SafeFileHandle input, SafeFileHandle output, string fileName)
+    {
+        var hostPath = FindOpenConsole(fileName);
+        if (hostPath is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return OpenConsoleConHost.Create(columns, rows, input, output, hostPath);
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine($"OpenConsole host '{fileName}' unavailable: {error}");
+            return null;
+        }
+    }
+
+    private static string? FindOpenConsole(string fileName)
     {
         var baseDirectory = AppContext.BaseDirectory;
-        var candidate = Path.Combine(baseDirectory, "OpenConsole.exe");
+        var candidate = Path.Combine(baseDirectory, fileName);
         if (File.Exists(candidate))
         {
             return candidate;
@@ -52,36 +82,37 @@ internal static class ConHost
         };
         if (architecture is not null)
         {
-            candidate = Path.Combine(baseDirectory, architecture, "OpenConsole.exe");
+            candidate = Path.Combine(baseDirectory, architecture, fileName);
             if (File.Exists(candidate))
             {
                 return candidate;
             }
         }
 
-        return ExtractBundledOpenConsole();
+        return ExtractBundledOpenConsole(fileName);
     }
 
     /// <summary>
-    /// Raised when the extracted OpenConsole.exe fails its integrity check.
+    /// Raised when an extracted OpenConsole binary fails its integrity check.
     /// Return true to re-extract from the embedded copy, false to fall back to
     /// the inbox conhost. When unset, mismatches are repaired silently. The
     /// mismatched file is never executed regardless of the outcome.
     /// </summary>
     internal static Func<string, bool>? IntegrityConflictHandler;
 
-    // Single-file distribution: OpenConsole.exe is embedded as a resource and
-    // extracted once to a content-addressed cache directory, because Windows
-    // can only CreateProcess a real file. The directory name carries the hash
-    // of the embedded copy, so upgrades extract fresh and unchanged installs
-    // reuse the cache. Reused files are re-verified against the embedded copy:
-    // a mismatch means corruption or tampering, and the file is never used.
-    private static string? ExtractBundledOpenConsole()
+    // Single-file distribution: the OpenConsole binaries are embedded as
+    // resources and extracted once to a content-addressed cache directory,
+    // because Windows can only CreateProcess a real file. The directory name
+    // carries the hash of the embedded copy, so upgrades extract fresh and
+    // unchanged installs reuse the cache. Reused files are re-verified against
+    // the embedded copy: a mismatch means corruption or tampering, and the
+    // file is never used.
+    private static string? ExtractBundledOpenConsole(string fileName)
     {
         try
         {
             using var stream = typeof(ConHost).Assembly
-                .GetManifestResourceStream("KevinZonda.Terminal.Binaries/OpenConsole.exe");
+                .GetManifestResourceStream($"KevinZonda.Terminal.Binaries/{fileName}");
             if (stream is null)
             {
                 return null;
@@ -96,7 +127,7 @@ internal static class ConHost
             var directory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "KTerm", "bin", hash);
-            var candidate = Path.Combine(directory, "OpenConsole.exe");
+            var candidate = Path.Combine(directory, fileName);
 
             if (File.Exists(candidate))
             {
@@ -107,7 +138,7 @@ internal static class ConHost
 
                 // Corruption or tampering: surface it, never run the file.
                 System.Diagnostics.Debug.WriteLine(
-                    $"Extracted OpenConsole.exe failed its integrity check: {candidate}");
+                    $"Extracted {fileName} failed its integrity check: {candidate}");
                 if (IntegrityConflictHandler?.Invoke(candidate) == false)
                 {
                     return null;
@@ -125,7 +156,7 @@ internal static class ConHost
         }
         catch (Exception error)
         {
-            System.Diagnostics.Debug.WriteLine($"Unable to extract the bundled OpenConsole.exe: {error}");
+            System.Diagnostics.Debug.WriteLine($"Unable to extract the bundled {fileName}: {error}");
             return null;
         }
     }
