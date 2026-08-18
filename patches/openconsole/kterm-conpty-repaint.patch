@@ -1,0 +1,482 @@
+diff --git a/src/host/ConptyRepaint.cpp b/src/host/ConptyRepaint.cpp
+new file mode 100644
+index 000000000..06d0bb53a
+--- /dev/null
++++ b/src/host/ConptyRepaint.cpp
+@@ -0,0 +1,118 @@
++// Copyright (c) Microsoft Corporation.
++// Licensed under the MIT license.
++
++#include "precomp.h"
++
++#include "ConptyRepaint.hpp"
++
++#include "directio.h"
++#include "screenInfo.hpp"
++#include "../interactivity/inc/ServiceLocator.hpp"
++
++#include <til/small_vector.h>
++
++using namespace Microsoft::Console;
++using namespace Microsoft::Console::Types;
++using namespace Microsoft::Console::Interactivity;
++using namespace Microsoft::Console::VirtualTerminal;
++
++namespace
++{
++    std::atomic<uint64_t> g_conptyOutputSubmits{ 0 };
++}
++
++uint64_t VirtualTerminal::ConptyOutputSubmitCount() noexcept
++{
++    return g_conptyOutputSubmits.load(std::memory_order_relaxed);
++}
++
++void VirtualTerminal::NoteConptyOutputSubmitted() noexcept
++{
++    g_conptyOutputSubmits.fetch_add(1, std::memory_order_relaxed);
++}
++
++// Method Description:
++// - Emits one full-viewport repaint frame to the terminal client. This is
++//   meant to be called after a ConPTY resize: ResizeWithReflow re-layouts our
++//   copy of the buffer, but no VT output is generated for the resize itself,
++//   so a terminal client that cannot replicate conhost's reflow (e.g. any
++//   client other than Windows Terminal, which shares the TextBuffer code)
++//   diverges permanently from our buffer and leaves stale cells behind.
++// - The frame repaints whatever buffer is currently active. The alt buffer is
++//   not reflowed on resize (GH#3493) and alt-screen apps usually repaint
++//   themselves when they receive SIGWINCH, but a correctly addressed repaint
++//   frame is harmless there too, so we don't special-case it.
++// - Rows are written in full and addressed with absolute CUPs relative to the
++//   visible viewport, because the viewport origin may be non-zero after a
++//   height shrink. WriteInfos emits SGR on attribute run boundaries and takes
++//   care of wide glyphs and control characters.
++// - The cursor is restored with a final absolute CUP to the buffer cursor's
++//   viewport-relative position, rather than DECSC/DECRC: the terminal's
++//   pre-frame cursor position is exactly what may have diverged. The existing
++//   DSR/CPR resync (ConptyCursorPositionMayBeWrong, GH#18725) remains as a
++//   fallback in case the client still disagrees.
++// Arguments:
++// - <none> (the console lock must be held by the caller)
++// Return Value:
++// - <none>
++void VirtualTerminal::EmitViewportRepaint() noexcept
++try
++{
++    auto& gci = ServiceLocator::LocateGlobals().getConsoleInformation();
++    auto& screenInfo = gci.GetActiveOutputBuffer();
++    auto writer = gci.GetVtWriterForBuffer(&screenInfo);
++    if (!writer)
++    {
++        return;
++    }
++
++    const auto& viewport = screenInfo.GetViewport();
++    const auto width = viewport.Width();
++    const auto height = viewport.Height();
++    if (width <= 0 || height <= 0)
++    {
++        return;
++    }
++
++    const auto area = gsl::narrow_cast<size_t>(width) * gsl::narrow_cast<size_t>(height);
++    til::small_vector<CHAR_INFO, 1024> infos;
++    infos.resize(area, CHAR_INFO{ L' ', FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED });
++
++    Viewport read;
++    LOG_IF_FAILED(ReadConsoleOutputWImplHelper(screenInfo, infos, viewport, read));
++
++    for (til::CoordType i = 0; i < height; i++)
++    {
++        const auto row = std::span<const CHAR_INFO>{ infos.begin() + i * width, static_cast<size_t>(width) };
++
++        // A fully-blank row gets an erase-to-EOL with default attributes
++        // instead of a full-width write. The buffer legitimately accumulates
++        // colored-blank filler rows when a resize reflows BCE output
++        // (progress bars etc.); dumping those verbatim floods the terminal
++        // with stale background color that no later output ever clears.
++        // Erasing trades that for a brief blank, which the app's next paint
++        // fills back in.
++        const auto blank = std::all_of(row.begin(), row.end(), [](const CHAR_INFO& ci) {
++            return ci.Char.UnicodeChar == L' ' &&
++                   WI_IsAnyFlagClear(ci.Attributes, COMMON_LVB_LEADING_BYTE | COMMON_LVB_TRAILING_BYTE);
++        });
++        if (blank)
++        {
++            writer.WriteCUP({ 0, i });
++            writer.WriteUTF8("\x1b[0m\x1b[K");
++            continue;
++        }
++
++        writer.WriteInfos({ 0, i }, row);
++    }
++
++    // Restore the attributes and cursor position the application expects.
++    writer.WriteAttributes(screenInfo.GetAttributes());
++    const auto& textBuffer = screenInfo.GetTextBuffer();
++    const auto cursor = textBuffer.GetCursor().GetPosition();
++    writer.WriteCUP({ std::clamp<til::CoordType>(cursor.x - viewport.Left(), 0, width - 1),
++                      std::clamp<til::CoordType>(cursor.y - viewport.Top(), 0, height - 1) });
++
++    writer.Submit();
++}
++CATCH_LOG()
+diff --git a/src/host/ConptyRepaint.hpp b/src/host/ConptyRepaint.hpp
+new file mode 100644
+index 000000000..4620de4c6
+--- /dev/null
++++ b/src/host/ConptyRepaint.hpp
+@@ -0,0 +1,17 @@
++// Copyright (c) Microsoft Corporation.
++// Licensed under the MIT license.
++
++#pragma once
++
++#include <cstdint>
++
++namespace Microsoft::Console::VirtualTerminal
++{
++    void EmitViewportRepaint() noexcept;
++
++    // Activity counter for all ConPTY output, incremented at the single choke
++    // point (VtIo::Writer::Submit). Used to tell "the app is repainting after
++    // a resize" apart from "the app is silent and the terminal needs a dump".
++    uint64_t ConptyOutputSubmitCount() noexcept;
++    void NoteConptyOutputSubmitted() noexcept;
++}
+diff --git a/src/host/PtySignalInputThread.cpp b/src/host/PtySignalInputThread.cpp
+index 063d3d4c4..918aa99c9 100644
+--- a/src/host/PtySignalInputThread.cpp
++++ b/src/host/PtySignalInputThread.cpp
+@@ -8,6 +8,7 @@
+ #include "output.h"
+ #include "handle.h"
+ #include "_stream.h"
++#include "ConptyRepaint.hpp"
+ #include "../interactivity/inc/ServiceLocator.hpp"
+ 
+ using namespace Microsoft::Console;
+@@ -141,6 +142,13 @@ try
+                 return S_OK;
+             }
+ 
++            // During an interactive window drag the terminal sends a ResizeWindow
++            // signal per intermediate size. Only the final size matters, and each
++            // resize now also triggers a full-viewport repaint, so coalesce
++            // back-to-back resize messages to avoid both redundant reflows and
++            // flooding the output pipe with repaint frames.
++            _DrainPendingResizes(resizeMsg);
++
+             _DoResizeWindow(resizeMsg);
+             break;
+         }
+@@ -170,20 +178,113 @@ CATCH_LOG_RETURN_HR(S_OK)
+ // - <none>
+ void PtySignalInputThread::_DoResizeWindow(const ResizeWindowData& data)
+ {
++    uint64_t submitsAtResize;
++    {
++        LockConsole();
++        auto Unlock = wil::scope_exit([&] { UnlockConsole(); });
++
++        // If the client app hasn't yet connected, stash the new size in the launchArgs.
++        // We'll later use the value in launchArgs to set up the console buffer
++        // We must be under lock here to ensure that someone else doesn't come in
++        // and set with `ConnectConsole` while we're looking and modifying this.
++        if (!_consoleConnected)
++        {
++            _earlyResize = data;
++            return;
++        }
++
++        _api.ResizeWindow(data.sx, data.sy);
++        submitsAtResize = ConptyOutputSubmitCount();
++    }
++
++    // Our buffer was just re-flowed with conhost's own rules while the terminal
++    // client re-laid out its screen with different ones, so the two have likely
++    // diverged. But most apps react to a resize by repainting themselves (TUI
++    // replay, progress bars, readline prompt redraws), and their own output
++    // converges the terminal far better than a buffer dump: a dump also
++    // surfaces reflow pollution (wrapped BCE filler rows) that the app would
++    // never have emitted. So only emit a repaint frame when the app stays
++    // silent. The wait must happen WITHOUT the console lock - app output
++    // needs it.
++    Sleep(350);
++
++    // A newer resize arrived meanwhile; the next loop iteration owns the
++    // repaint decision for the final size.
++    if (_HasPendingResize())
++    {
++        return;
++    }
++
+     LockConsole();
+     auto Unlock = wil::scope_exit([&] { UnlockConsole(); });
++    if (ConptyOutputSubmitCount() == submitsAtResize)
++    {
++        EmitViewportRepaint();
++    }
++}
+ 
+-    // If the client app hasn't yet connected, stash the new size in the launchArgs.
+-    // We'll later use the value in launchArgs to set up the console buffer
+-    // We must be under lock here to ensure that someone else doesn't come in
+-    // and set with `ConnectConsole` while we're looking and modifying this.
+-    if (!_consoleConnected)
++// Method Description:
++// - Checks (without consuming) whether a ResizeWindow message is queued in the
++//   signal pipe.
++// Return Value:
++// - true if a complete ResizeWindow message is pending
++bool PtySignalInputThread::_HasPendingResize() const
++{
++    struct
+     {
+-        _earlyResize = data;
+-        return;
++        PtySignal signal;
++        ResizeWindowData size;
++    } msg;
++
++    DWORD available = 0;
++    if (!PeekNamedPipe(_hFile.get(), nullptr, 0, nullptr, &available, nullptr) || available < sizeof(msg))
++    {
++        return false;
+     }
+ 
+-    _api.ResizeWindow(data.sx, data.sy);
++    DWORD peeked = 0;
++    return PeekNamedPipe(_hFile.get(), &msg, sizeof(msg), &peeked, nullptr, nullptr) &&
++           peeked == sizeof(msg) &&
++           msg.signal == PtySignal::ResizeWindow;
++}
++
++// Method Description:
++// - Drains ResizeWindow messages that are already queued in the signal pipe,
++//   keeping only the last one. Only consumes a queued message once a complete
++//   one (id + payload) is available, and never touches other message types.
++// Arguments:
++// - data - The resize message to coalesce into; updated in place.
++// Return Value:
++// - <none>
++void PtySignalInputThread::_DrainPendingResizes(ResizeWindowData& data)
++{
++    struct
++    {
++        PtySignal signal;
++        ResizeWindowData size;
++    } msg;
++
++    while (_hFile)
++    {
++        DWORD available = 0;
++        if (!PeekNamedPipe(_hFile.get(), nullptr, 0, nullptr, &available, nullptr) || available < sizeof(msg))
++        {
++            break;
++        }
++
++        DWORD peeked = 0;
++        if (!PeekNamedPipe(_hFile.get(), &msg, sizeof(msg), &peeked, nullptr, nullptr) || peeked != sizeof(msg) || msg.signal != PtySignal::ResizeWindow)
++        {
++            break;
++        }
++
++        if (!_GetData(&msg, sizeof(msg)))
++        {
++            break;
++        }
++
++        data = msg.size;
++    }
+ }
+ 
+ void PtySignalInputThread::_DoClearBuffer(const bool keepCursorRow) const
+diff --git a/src/host/PtySignalInputThread.hpp b/src/host/PtySignalInputThread.hpp
+index 9ff4fb0c2..c14dd0d7d 100644
+--- a/src/host/PtySignalInputThread.hpp
++++ b/src/host/PtySignalInputThread.hpp
+@@ -67,6 +67,8 @@ namespace Microsoft::Console
+ 
+         [[nodiscard]] HRESULT _InputThread() noexcept;
+         [[nodiscard]] bool _GetData(_Out_writes_bytes_(cbBuffer) void* const pBuffer, const DWORD cbBuffer);
++        void _DrainPendingResizes(ResizeWindowData& data);
++        bool _HasPendingResize() const;
+         void _DoResizeWindow(const ResizeWindowData& data);
+         void _DoSetWindowParent(const SetParentData& data);
+         void _DoClearBuffer(bool keepCursorRow) const;
+diff --git a/src/host/VtIo.cpp b/src/host/VtIo.cpp
+index f5214d381..53dcb75fe 100644
+--- a/src/host/VtIo.cpp
++++ b/src/host/VtIo.cpp
+@@ -9,6 +9,7 @@
+ #include "directio.h"
+ #include "handle.h" // LockConsole
+ #include "output.h" // CloseConsoleProcessState
++#include "ConptyRepaint.hpp"
+ #include "../interactivity/inc/ServiceLocator.hpp"
+ #include "../renderer/base/renderer.hpp"
+ #include "../types/inc/CodepointWidthDetector.hpp"
+@@ -333,7 +334,7 @@ static constexpr bool IsControlCharacter(wchar_t wch) noexcept
+ // Formats the given console attributes to their closest VT equivalent.
+ // `out` must refer to at least `formatAttributesMaxLen` characters of valid memory.
+ // Returns a pointer past the end.
+-static constexpr size_t formatAttributesMaxLen = 16;
++static constexpr size_t formatAttributesMaxLen = 64;
+ static char* formatAttributes(char* out, const TextAttribute& attributes) noexcept
+ {
+     static uint8_t sgr[] = { 30, 31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97 };
+@@ -346,27 +347,114 @@ static char* formatAttributes(char* out, const TextAttribute& attributes) noexce
+     memcpy(out, "\x1b[0", 4);
+     out += 3;
+ 
+-    // 2 bytes.
++    // 2 bytes each.
++    if (attributes.IsIntense())
++    {
++        memcpy(out, ";1", 2);
++        out += 2;
++    }
++    if (attributes.IsFaint())
++    {
++        memcpy(out, ";2", 2);
++        out += 2;
++    }
++    if (attributes.IsItalic())
++    {
++        memcpy(out, ";3", 2);
++        out += 2;
++    }
++
++    // 2-4 bytes.
++    switch (attributes.GetUnderlineStyle())
++    {
++    case UnderlineStyle::SinglyUnderlined:
++        memcpy(out, ";4", 2);
++        out += 2;
++        break;
++    case UnderlineStyle::DoublyUnderlined:
++        memcpy(out, ";21", 3);
++        out += 3;
++        break;
++    case UnderlineStyle::CurlyUnderlined:
++        memcpy(out, ";4:3", 4);
++        out += 4;
++        break;
++    case UnderlineStyle::DottedUnderlined:
++        memcpy(out, ";4:4", 4);
++        out += 4;
++        break;
++    case UnderlineStyle::DashedUnderlined:
++        memcpy(out, ";4:5", 4);
++        out += 4;
++        break;
++    default:
++        break;
++    }
++
++    // 2 bytes each.
++    if (attributes.IsBlinking())
++    {
++        memcpy(out, ";5", 2);
++        out += 2;
++    }
+     if (attributes.IsReverseVideo())
+     {
+         memcpy(out, ";7", 2);
+         out += 2;
+     }
+-
+-    // 3 bytes (";97").
+-    if (attributes.GetForeground().IsLegacy())
++    if (attributes.IsInvisible())
+     {
+-        const uint8_t index = sgr[attributes.GetForeground().GetIndex()];
+-        out = fmt::format_to(out, FMT_COMPILE(";{}"), index);
++        memcpy(out, ";8", 2);
++        out += 2;
++    }
++    if (attributes.IsCrossedOut())
++    {
++        memcpy(out, ";9", 2);
++        out += 2;
+     }
+ 
+-    // 4 bytes (";107").
+-    if (attributes.GetBackground().IsLegacy())
++    // 3 bytes.
++    if (attributes.IsOverlined())
+     {
+-        const uint8_t index = sgr[attributes.GetBackground().GetIndex()] + 10;
+-        out = fmt::format_to(out, FMT_COMPILE(";{}"), index);
++        memcpy(out, ";53", 3);
++        out += 3;
+     }
+ 
++    const auto formatColor = [&out](const TextColor& color, bool background) {
++        if (color.IsLegacy())
++        {
++            // 3 bytes (";97"), 4 bytes (";107").
++            const uint8_t index = sgr[color.GetIndex()] + (background ? 10 : 0);
++            out = fmt::format_to(out, FMT_COMPILE(";{}"), index);
++        }
++        else if (color.IsIndex256())
++        {
++            // 8 bytes (";38;5;255").
++            if (background)
++            {
++                out = fmt::format_to(out, FMT_COMPILE(";48;5;{}"), color.GetIndex());
++            }
++            else
++            {
++                out = fmt::format_to(out, FMT_COMPILE(";38;5;{}"), color.GetIndex());
++            }
++        }
++        else if (color.IsRgb())
++        {
++            // 19 bytes (";38;2;255;255;255").
++            if (background)
++            {
++                out = fmt::format_to(out, FMT_COMPILE(";48;2;{};{};{}"), color.GetR(), color.GetG(), color.GetB());
++            }
++            else
++            {
++                out = fmt::format_to(out, FMT_COMPILE(";38;2;{};{};{}"), color.GetR(), color.GetG(), color.GetB());
++            }
++        }
++    };
++    formatColor(attributes.GetForeground(), false);
++    formatColor(attributes.GetBackground(), true);
++
+     // 1 byte.
+     *out++ = 'm';
+     return out;
+@@ -455,6 +543,7 @@ VtIo::Writer::operator bool() const noexcept
+ void VtIo::Writer::Submit()
+ {
+     const auto io = std::exchange(_io, nullptr);
++    NoteConptyOutputSubmitted();
+     io->_uncork();
+ }
+ 
+diff --git a/src/host/host-common.vcxitems b/src/host/host-common.vcxitems
+index c5ae9909a..80a5ed9d4 100644
+--- a/src/host/host-common.vcxitems
++++ b/src/host/host-common.vcxitems
+@@ -4,6 +4,7 @@
+     <ClCompile Include="..\alias.cpp" />
+     <ClCompile Include="..\cmdline.cpp" />
+     <ClCompile Include="..\ConsoleArguments.cpp" />
++    <ClCompile Include="..\ConptyRepaint.cpp" />
+     <ClCompile Include="..\readDataCooked.cpp" />
+     <ClCompile Include="..\consoleInformation.cpp" />
+     <ClCompile Include="..\dbcs.cpp" />
+@@ -56,6 +57,7 @@
+     <ClInclude Include="..\conapi.h" />
+     <ClInclude Include="..\conddkrefs.h" />
+     <ClInclude Include="..\ConsoleArguments.hpp" />
++    <ClInclude Include="..\ConptyRepaint.hpp" />
+     <ClInclude Include="..\conserv.h" />
+     <ClInclude Include="..\conwinuserrefs.h" />
+     <ClInclude Include="..\dbcs.h" />
