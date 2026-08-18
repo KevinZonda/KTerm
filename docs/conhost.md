@@ -192,7 +192,52 @@ OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文�
   产物为单个约 5MB 的 exe。
 - 真机：`codex resume` 后滚轮可查看完整历史。
 
-## 6. 遗留事项与边界
+## 6. resize 与 ConPTY 缓冲区语义：windowsPty 选项
+
+passthrough 上线后又暴露出一个同源问题：resize 窗口时，正在刷新的
+BCE 进度条（如 PowerShell 的 `Write-Progress`、kimi-code 安装器的
+下载条）会留下多份残影，且不随后续输出清除。
+
+### 6.1 红鲱鱼：OSC 11
+
+最初怀疑 OSC 11（背景色序列）处理缺陷。核查结论：xterm.js 6.0.0 对
+OSC 10/11/12 的设置与查询均完整支持，`_handleColorEvent` 有
+`_themeService` 守卫（pre-open 期间静默丢弃），KTerm 前端也不拦截
+这些序列。与残影无关，排除。
+
+### 6.2 根因：xterm.js 的默认 resize 语义与 ConPTY 缓冲区模型不一致
+
+xterm.js 默认按"独立终端"工作：窗口变窄时自己 reflow（重排换行），
+拉高时从自己的 scrollback 回拉行补进视口。但在 ConPTY 架构下，
+屏幕内容的所有权在 ConPTY/OpenConsole 一侧——resize 后由它重发
+视口内容，xterm 本地的 scrollback 与 ConPTY 的缓冲区并不共享。
+
+两端各自做一套的后果：BCE 进度条这类"整行背景色 + 原地重绘"的
+内容，在 xterm reflow 重排后被画到与 ConPTY 重发内容不同的位置，
+旧行无人擦除，形成残影。这与主线问题（拉高后前文重现）同源：
+都是**客户端本地缓冲区语义与 ConPTY 缓冲区语义冲突**。
+
+### 6.3 修复：`windowsPty: { backend: 'conpty', buildNumber: 19045 }`
+
+xterm.js 6.0.0 的 `windowsPty` 选项（WindowsPtyType）正是为此设计，
+在 `terminal-controller.ts` 创建 Terminal 时设置：
+
+- 只要设置了 `backend`/`buildNumber`，拉高窗口时 xterm 不再从本地
+  scrollback 回拉行，而是在底部补空行，把视口内容留给 ConPTY 重发；
+- `buildNumber < 21376`（Win11 22H2 之前）时，进一步禁用 xterm 自己
+  的 reflow——变窄不再重排换行，完全交给 ConPTY 端处理。
+
+真机用 `scripts/resize-progress.ps1`（400 步 BCE 进度条 + 提示
+随意 resize）两轮对比：
+
+- `buildNumber: 26100`（只启用补空行、保留 reflow）：残影依旧严重；
+- `buildNumber: 19045`（补空行 + 禁 reflow）：各种 resize 方向下
+  画面干净，进度条行为与 conhost/WT 一致。
+
+代价：窗口变窄时长行不再自动重排换行（截断显示），这正是真实
+conhost 的行为，可以接受。修复提交：`ae72da5`。
+
+## 7. 遗留事项与边界
 
 - codex 对 resize 重放有按终端的行数上限（`resize_reflow_cap.rs`：WT
   9001 / VSCode 1000 / 未知终端走 fallback）。KevinZonda Terminal 是未知终端，超长
@@ -208,7 +253,7 @@ OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文�
   验证；当前实现在所有版本上统一优先使用自带的 OpenConsole，行为一致
   且可控。
 
-## 7. 参考资料
+## 8. 参考资料
 
 - codex 源码：`codex-rs/tui/src/insert_history.rs`、`app/resize_reflow.rs`、
   `custom_terminal.rs`
@@ -217,6 +262,7 @@ OpenConsole.exe`（写临时文件 + 原子移动）。缓存复用前会对文�
   `src/terminal/adapter/adaptDispatch.cpp`（_DoLineFeed）
 - KevinZonda Terminal 实现：`src/KevinZonda.Terminal/Interop/`（IConHost、ConHost、
   KernelConHost、OpenConsoleConHost、NativeMethods.Conpty）、
-  `tools/openconsole/README.md`
+  `tools/openconsole/README.md`、`scripts/resize-progress.ps1`（resize
+  残影复现脚本）
 - 上游 issue：openai/codex#27644、#30745、#35335、#36474、#37635
 - Microsoft 文档：[Pseudoconsoles](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
