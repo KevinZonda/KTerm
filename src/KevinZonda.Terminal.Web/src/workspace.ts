@@ -780,7 +780,8 @@ export class Workspace implements TerminalCallbacks {
       this.bridge,
       this,
       this.settings.font,
-      this.settings.theme
+      this.settings.theme,
+      this.settings.cursor
     );
     this.closedSessionIds.delete(session.sessionId);
     this.terminals.set(session.sessionId, terminal);
@@ -813,6 +814,7 @@ export class Workspace implements TerminalCallbacks {
     this.terminals.forEach(terminal => {
       terminal.applyFontSettings(settings.font);
       terminal.applyThemeSettings(settings.theme);
+      terminal.applyCursorSettings(settings.cursor);
     });
     if (usageDisplayChanged) {
       this.renderAgentUsage(this.agentUsageStatus);

@@ -3,7 +3,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import type { IDisposable } from '@xterm/xterm';
-import type { FontSettings, NativeBridge, SessionCreated, ThemeSettings } from './bridge';
+import type { CursorSettings, FontSettings, NativeBridge, SessionCreated, ThemeSettings } from './bridge';
 import { resolveTerminalTheme } from './themes';
 
 export interface TerminalCallbacks {
@@ -52,7 +52,8 @@ export class TerminalController {
     bridge: NativeBridge,
     callbacks: TerminalCallbacks,
     font: FontSettings,
-    theme: ThemeSettings
+    theme: ThemeSettings,
+    cursor: CursorSettings
   ) {
     this.sessionId = session.sessionId;
     this.bridge = bridge;
@@ -67,8 +68,8 @@ export class TerminalController {
     this.terminal = new Terminal({
       allowProposedApi: false,
       convertEol: false,
-      cursorBlink: true,
-      cursorStyle: 'bar',
+      cursorBlink: cursor.blink,
+      cursorStyle: cursor.shape,
       fontFamily: font.family,
       fontSize: font.size,
       lineHeight: font.lineHeight,
@@ -216,6 +217,11 @@ export class TerminalController {
 
   public applyThemeSettings(theme: ThemeSettings): void {
     this.terminal.options.theme = resolveTerminalTheme(theme.name);
+  }
+
+  public applyCursorSettings(cursor: CursorSettings): void {
+    this.terminal.options.cursorStyle = cursor.shape;
+    this.terminal.options.cursorBlink = cursor.blink;
   }
 
   public scheduleFit(): void {

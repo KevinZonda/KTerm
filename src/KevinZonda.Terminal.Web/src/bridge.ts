@@ -15,12 +15,18 @@ export interface FontSettings {
 export interface AppSettings {
   font: FontSettings;
   theme: ThemeSettings;
+  cursor: CursorSettings;
   indicators: IndicatorSettings;
   shell: ShellSettings;
 }
 
 export interface ThemeSettings {
   name: string;
+}
+
+export interface CursorSettings {
+  shape: 'block' | 'underline' | 'bar';
+  blink: boolean;
 }
 
 export interface IndicatorSettings {
@@ -99,6 +105,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   theme: {
     name: DEFAULT_THEME_NAME
+  },
+  cursor: {
+    shape: 'bar',
+    blink: true
   },
   indicators: {
     showWorkspaceIndicator: true,
@@ -205,6 +215,9 @@ export class NativeBridge {
     const theme = typeof partialSettings.theme === 'object' && partialSettings.theme !== null
       ? partialSettings.theme
       : DEFAULT_SETTINGS.theme;
+    const cursor = typeof partialSettings.cursor === 'object' && partialSettings.cursor !== null
+      ? partialSettings.cursor
+      : DEFAULT_SETTINGS.cursor;
     const indicators = typeof partialSettings.indicators === 'object' && partialSettings.indicators !== null
       ? partialSettings.indicators
       : DEFAULT_SETTINGS.indicators;
@@ -225,6 +238,12 @@ export class NativeBridge {
     return {
       font: { family, size, lineHeight },
       theme: { name: normalizeTerminalThemeName(theme.name) },
+      cursor: {
+        shape: cursor.shape === 'block' || cursor.shape === 'underline'
+          ? cursor.shape
+          : 'bar',
+        blink: cursor.blink !== false
+      },
       indicators: {
         showWorkspaceIndicator: indicators.showWorkspaceIndicator !== false,
         showRemainingUsage: indicators.showRemainingUsage === true,

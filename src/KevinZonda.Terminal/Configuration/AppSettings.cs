@@ -11,6 +11,8 @@ internal sealed record AppSettings
 
     public ThemeSettings Theme { get; init; } = new();
 
+    public CursorSettings Cursor { get; init; } = new();
+
     public IndicatorSettings Indicators { get; init; } = new();
 
     public ShellSettings Shell { get; init; } = new();
@@ -43,6 +45,7 @@ internal sealed record AppSettings
             {
                 Name = theme.Name
             },
+            Cursor = CursorSettings.Normalize(settings?.Cursor),
             Indicators = IndicatorSettings.Normalize(settings?.Indicators),
             Shell = ShellSettings.Normalize(settings?.Shell),
             ConHost = ConHostSettings.Normalize(settings?.ConHost)
@@ -76,6 +79,28 @@ internal sealed record FontSettings
 internal sealed record ThemeSettings
 {
     public string Name { get; init; } = TerminalThemeCatalog.DefaultName;
+}
+
+internal sealed record CursorSettings
+{
+    internal const string BlockShape = "block";
+    internal const string UnderlineShape = "underline";
+    internal const string BarShape = "bar";
+
+    public string Shape { get; init; } = BarShape;
+
+    public bool Blink { get; init; } = true;
+
+    internal static CursorSettings Normalize(CursorSettings? settings) => new()
+    {
+        Shape = settings?.Shape?.ToLowerInvariant() switch
+        {
+            BlockShape => BlockShape,
+            UnderlineShape => UnderlineShape,
+            _ => BarShape
+        },
+        Blink = settings?.Blink ?? true
+    };
 }
 
 internal sealed record IndicatorSettings

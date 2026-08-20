@@ -18,6 +18,8 @@ internal sealed class SettingsForm : Form
     private readonly Label _preview = new();
     private readonly ComboBox _themeName = new();
     private readonly Panel _themePreview = new();
+    private readonly ComboBox _cursorShape = new();
+    private readonly CheckBox _cursorBlink = new();
     private readonly CheckBox _showWorkspaceIndicator = new();
     private readonly CheckBox _showRemainingUsage = new();
     private readonly CheckBox _autoRenewKimiToken = new();
@@ -52,6 +54,7 @@ internal sealed class SettingsForm : Form
         Controls.Add(CreateLayout());
         PopulateFonts();
         PopulateThemes();
+        PopulateCursorShapes();
         PopulateShellProfiles();
         PopulateMsys2Environments();
         PopulateShellExitBehaviors();
@@ -69,6 +72,12 @@ internal sealed class SettingsForm : Form
         Theme = new ThemeSettings
         {
             Name = _themeName.Text
+        },
+        Cursor = new CursorSettings
+        {
+            Shape = (_cursorShape.SelectedItem as string)?.ToLowerInvariant()
+                ?? CursorSettings.BarShape,
+            Blink = _cursorBlink.Checked
         },
         Indicators = new IndicatorSettings
         {
@@ -191,7 +200,7 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 2,
-            RowCount = 4,
+            RowCount = 6,
             Margin = new Padding(0)
         };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
@@ -218,6 +227,20 @@ internal sealed class SettingsForm : Form
         ConfigureNumber(_lineHeight, 0.8m, 2, 0.01m, 2);
         _lineHeight.Margin = new Padding(10, 5, 0, 16);
         fields.Controls.Add(_lineHeight, 1, 3);
+
+        fields.Controls.Add(CreateLabel("Cursor shape"), 0, 4);
+        ConfigureField(_cursorShape);
+        _cursorShape.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cursorShape.Margin = new Padding(0, 5, 5, 16);
+        fields.Controls.Add(_cursorShape, 0, 5);
+
+        _cursorBlink.AutoSize = true;
+        _cursorBlink.Text = "Blink cursor";
+        _cursorBlink.ForeColor = ForeColor;
+        _cursorBlink.BackColor = SurfaceColor;
+        _cursorBlink.Margin = new Padding(10, 8, 0, 16);
+        _cursorBlink.UseVisualStyleBackColor = false;
+        fields.Controls.Add(_cursorBlink, 1, 5);
         layout.Controls.Add(fields, 0, 0);
 
         var previewPanel = new Panel
@@ -513,6 +536,13 @@ internal sealed class SettingsForm : Form
             .ToArray());
     }
 
+    private void PopulateCursorShapes()
+    {
+        _cursorShape.Items.AddRange(["Block", "Underline", "Bar"]);
+        _cursorShape.SelectedItem = "Bar";
+        _cursorBlink.Checked = true;
+    }
+
     private void PopulateShellProfiles()
     {
         _shellProfile.Items.AddRange(ShellProfileCatalog.All.Cast<object>().ToArray());
@@ -551,6 +581,14 @@ internal sealed class SettingsForm : Form
             {
                 _themeName.SelectedIndex = 0;
             }
+
+            _cursorShape.SelectedItem = normalized.Cursor.Shape switch
+            {
+                CursorSettings.BlockShape => "Block",
+                CursorSettings.UnderlineShape => "Underline",
+                _ => "Bar"
+            };
+            _cursorBlink.Checked = normalized.Cursor.Blink;
 
             _showWorkspaceIndicator.Checked = normalized.Indicators.ShowWorkspaceIndicator;
             _showRemainingUsage.Checked = normalized.Indicators.ShowRemainingUsage;
