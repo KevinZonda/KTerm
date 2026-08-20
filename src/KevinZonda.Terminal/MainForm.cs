@@ -508,7 +508,10 @@ internal sealed class MainForm : Form
                 _settings = await _settingsStore.SaveAsync(settingsForm.Settings);
                 await _sessions.UpdateSettingsAsync(_settings);
                 _agentUsage.UpdateSettings(_settings);
-                _sessions.Prewarm(80, 24);
+                // Do not eagerly launch a hidden shell after saving settings.
+                // Closing the window while an MSYS2 prewarm is still loading
+                // can surface a zsh DLL-initialization error during Job cleanup.
+                // The next requested tab will start with the new settings on demand.
                 _bridge?.SendSettingsChanged(_settings);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
