@@ -15,7 +15,7 @@ internal sealed class CrashReportForm : Form
     internal CrashReportForm(string reportPath, int exitCode, int crashCount)
     {
         _reportPath = reportPath;
-        Text = "KTerm crashed";
+        Text = "KevinZonda Terminal crashed";
         BackColor = BackgroundColor;
         ForeColor = ForegroundColor;
         ClientSize = new Size(720, 500);
@@ -46,8 +46,8 @@ internal sealed class CrashReportForm : Form
             Font = new Font(Font, FontStyle.Bold),
             ForeColor = ForegroundColor,
             Text = crashCount >= 3
-                ? "KTerm has crashed repeatedly"
-                : "KTerm closed unexpectedly"
+                ? "KevinZonda Terminal has crashed repeatedly"
+                : "KevinZonda Terminal closed unexpectedly"
         };
         layout.Controls.Add(title, 0, 0);
 
@@ -58,7 +58,7 @@ internal sealed class CrashReportForm : Form
             Margin = new Padding(0, 12, 0, 16),
             ForeColor = MutedColor,
             Text = "The terminal sessions from the crashed window cannot be recovered. " +
-                "You can restart KTerm in the same working directory or inspect the crash report."
+                "You can restart KevinZonda Terminal in the same working directory or inspect the crash report."
         };
         layout.Controls.Add(summary, 0, 1);
 
@@ -103,7 +103,7 @@ internal sealed class CrashReportForm : Form
         };
         var close = CreateButton("Close");
         close.DialogResult = DialogResult.Cancel;
-        var restart = CreateButton("Restart KTerm");
+        var restart = CreateButton("Restart KevinZonda Terminal");
         restart.DialogResult = DialogResult.Retry;
         actions.Controls.Add(close);
         actions.Controls.Add(restart);
@@ -148,7 +148,7 @@ internal sealed class CrashReportForm : Form
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return header + Environment.NewLine + Environment.NewLine +
-                $"KTerm could not read the crash report: {exception.Message}";
+                $"KevinZonda Terminal could not read the crash report: {exception.Message}";
         }
     }
 
@@ -169,8 +169,8 @@ internal sealed class CrashReportForm : Form
         {
             MessageBox.Show(
                 this,
-                $"KTerm could not open the crash report.\n\n{exception.Message}",
-                "KTerm crash report",
+                $"KevinZonda Terminal could not open the crash report.\n\n{exception.Message}",
+                "KevinZonda Terminal crash report",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
@@ -190,8 +190,8 @@ internal sealed class CrashReportForm : Form
         {
             MessageBox.Show(
                 this,
-                $"KTerm could not copy the crash details.\n\n{exception.Message}",
-                "KTerm crash report",
+                $"KevinZonda Terminal could not copy the crash details.\n\n{exception.Message}",
+                "KevinZonda Terminal crash report",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
