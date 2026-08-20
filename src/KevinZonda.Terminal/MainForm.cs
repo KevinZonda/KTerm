@@ -161,6 +161,7 @@ internal sealed class MainForm : Form
             _agentUsage,
             _systemMetrics,
             ShowSettings,
+            LaunchNewInstance,
             OpenExternal,
             SaveFontSize,
             _settings);
@@ -475,8 +476,10 @@ internal sealed class MainForm : Form
                 "dotnet",
                 StringComparison.OrdinalIgnoreCase))
             {
-                var assemblyPath = typeof(MainForm).Assembly.Location;
-                if (string.IsNullOrWhiteSpace(assemblyPath))
+                var assemblyName = typeof(MainForm).Assembly.GetName().Name
+                    ?? "KevinZonda.Terminal";
+                var assemblyPath = Path.Combine(AppContext.BaseDirectory, $"{assemblyName}.dll");
+                if (!File.Exists(assemblyPath))
                 {
                     throw new FileNotFoundException("Unable to locate the KevinZonda Terminal assembly.");
                 }

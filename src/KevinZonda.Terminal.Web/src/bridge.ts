@@ -175,6 +175,10 @@ export class NativeBridge {
     this.send('window.settings', {});
   }
 
+  public openNewInstance(): void {
+    this.send('window.newInstance', {});
+  }
+
   public openExternal(uri: string): void {
     this.send('window.openExternal', { uri });
   }

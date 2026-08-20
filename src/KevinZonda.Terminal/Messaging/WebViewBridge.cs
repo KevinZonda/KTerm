@@ -21,6 +21,7 @@ internal sealed class WebViewBridge : IDisposable
     private readonly AgentUsageStatusService _agentUsage;
     private readonly SystemMetricsService _systemMetrics;
     private readonly Action _openSettings;
+    private readonly Action _openNewInstance;
     private readonly Action<string> _openExternal;
     private readonly Func<double, Task<AppSettings>> _saveFontSize;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<string>> _outputQueues = new();
@@ -34,6 +35,7 @@ internal sealed class WebViewBridge : IDisposable
         AgentUsageStatusService agentUsage,
         SystemMetricsService systemMetrics,
         Action openSettings,
+        Action openNewInstance,
         Action<string> openExternal,
         Func<double, Task<AppSettings>> saveFontSize,
         AppSettings settings)
@@ -43,6 +45,7 @@ internal sealed class WebViewBridge : IDisposable
         _agentUsage = agentUsage;
         _systemMetrics = systemMetrics;
         _openSettings = openSettings;
+        _openNewInstance = openNewInstance;
         _openExternal = openExternal;
         _saveFontSize = saveFontSize;
         _settings = settings;
@@ -141,6 +144,10 @@ internal sealed class WebViewBridge : IDisposable
 
                 case "window.settings":
                     _webView.BeginInvoke(_openSettings);
+                    break;
+
+                case "window.newInstance":
+                    _webView.BeginInvoke(_openNewInstance);
                     break;
 
                 case "window.openExternal":

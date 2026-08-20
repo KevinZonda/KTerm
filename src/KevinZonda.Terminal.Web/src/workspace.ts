@@ -247,6 +247,16 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private readonly handleKeyboard = (event: KeyboardEvent): void => {
+    if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey &&
+        event.code === 'KeyN') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) {
+        this.bridge.openNewInstance();
+      }
+      return;
+    }
+
     if (event.repeat) {
       return;
     }
