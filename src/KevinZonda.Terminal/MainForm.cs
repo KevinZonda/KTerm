@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using KevinZonda.Terminal.Configuration;
+using KevinZonda.Terminal.Hosting;
 using KevinZonda.Terminal.Interop;
 using KevinZonda.Terminal.Messaging;
 using KevinZonda.Terminal.Monitoring;
@@ -457,36 +458,9 @@ internal sealed class MainForm : Form
     {
         try
         {
-            var executablePath = Environment.ProcessPath;
-            if (string.IsNullOrWhiteSpace(executablePath))
-            {
-                throw new FileNotFoundException("Unable to locate the KevinZonda Terminal executable.");
-            }
-
-            var startInfo = new ProcessStartInfo(executablePath)
-            {
-                UseShellExecute = false,
-                WorkingDirectory = _startingDirectory
-            };
-
-            // Environment.ProcessPath points to dotnet.exe when the app is
-            // launched as `dotnet KevinZonda.Terminal.dll` during development.
-            if (string.Equals(
-                Path.GetFileNameWithoutExtension(executablePath),
-                "dotnet",
-                StringComparison.OrdinalIgnoreCase))
-            {
-                var assemblyName = typeof(MainForm).Assembly.GetName().Name
-                    ?? "KevinZonda.Terminal";
-                var assemblyPath = Path.Combine(AppContext.BaseDirectory, $"{assemblyName}.dll");
-                if (!File.Exists(assemblyPath))
-                {
-                    throw new FileNotFoundException("Unable to locate the KevinZonda Terminal assembly.");
-                }
-                startInfo.ArgumentList.Add(assemblyPath);
-            }
-
-            startInfo.ArgumentList.Add(_startingDirectory);
+            var startInfo = SelfProcessLauncher.CreateStartInfo(
+                _startingDirectory,
+                [_startingDirectory]);
             if (Process.Start(startInfo) is null)
             {
                 throw new InvalidOperationException("Windows did not start the new KevinZonda Terminal instance.");

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using KevinZonda.Terminal.Hosting;
 using KevinZonda.Terminal.Interop;
 using KevinZonda.Terminal.Terminal;
 
@@ -6,18 +8,70 @@ namespace KevinZonda.Terminal;
 internal static class Program
 {
     [STAThread]
-    private static void Main(string[] args)
+    private static int Main(string[] args)
     {
         if (ConsoleThemeHelper.TryRun(args, out var helperExitCode))
         {
-            Environment.ExitCode = helperExitCode;
-            return;
+            return helperExitCode;
+        }
+
+#if DEBUG
+        // Keep Visual Studio attached to the actual UI process. Non-debugger
+        // Debug builds and every Release build still use the supervisor.
+        if (Debugger.IsAttached)
+        {
+            return RunApplication(args, CrashReportStore.CreatePath());
+        }
+#endif
+
+        if (ApplicationSupervisor.TryParseChildArguments(
+                args,
+                out var crashReportPath,
+                out var applicationArgs))
+        {
+            return RunApplication(applicationArgs, crashReportPath);
         }
 
         ApplicationConfiguration.Initialize();
         Application.SetColorMode(SystemColorMode.Dark);
+        return ApplicationSupervisor.Run(args);
+    }
 
-        string startingDirectory;
+    private static int RunApplication(string[] args, string crashReportPath)
+    {
+        var crashHandlerInstalled = false;
+        try
+        {
+            ManagedCrashHandler.Install(crashReportPath);
+            crashHandlerInstalled = true;
+            ApplicationConfiguration.Initialize();
+            Application.SetColorMode(SystemColorMode.Dark);
+            if (!TryGetStartingDirectory(args, out var startingDirectory))
+            {
+                return 0;
+            }
+
+            ConfigureConHostIntegrityPrompt();
+            Application.Run(new MainForm(startingDirectory));
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            ManagedCrashHandler.Record(exception, "Application.Run");
+            return ManagedCrashHandler.FatalExitCode;
+        }
+        finally
+        {
+            if (crashHandlerInstalled)
+            {
+                ManagedCrashHandler.Uninstall();
+            }
+        }
+    }
+
+    private static bool TryGetStartingDirectory(string[] args, out string startingDirectory)
+    {
+        startingDirectory = string.Empty;
         try
         {
             if (args.Length > 1)
@@ -32,6 +86,8 @@ internal static class Program
                 throw new DirectoryNotFoundException(
                     $"The starting directory does not exist:\n\n{startingDirectory}");
             }
+
+            return true;
         }
         catch (Exception exception) when (
             exception is ArgumentException or
@@ -44,9 +100,12 @@ internal static class Program
                 "KevinZonda Terminal startup error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
-            return;
+            return false;
         }
+    }
 
+    private static void ConfigureConHostIntegrityPrompt()
+    {
         // Alert when the cached OpenConsole.exe fails its integrity check: the
         // file may be corrupted or tampered with, and it is never executed.
         // A "no" decision is remembered so later sessions in this run don't nag.
@@ -74,7 +133,5 @@ internal static class Program
             }
             return true;
         };
-
-        Application.Run(new MainForm(startingDirectory));
     }
 }

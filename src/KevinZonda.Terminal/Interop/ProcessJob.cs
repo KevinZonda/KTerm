@@ -6,6 +6,7 @@ namespace KevinZonda.Terminal.Interop;
 internal sealed class ProcessJob : IDisposable
 {
     private const int JobObjectBasicProcessIdList = 3;
+    private const int JobObjectExtendedLimitInformation = 9;
     private const int ErrorMoreData = 234;
     private readonly SafeKernelHandle _handle;
     private int _disposed;
@@ -22,7 +23,27 @@ internal sealed class ProcessJob : IDisposable
         {
             throw NativeMethods.LastError("Unable to create a terminal process job.");
         }
-        return new ProcessJob(new SafeKernelHandle(rawHandle));
+
+        var handle = new SafeKernelHandle(rawHandle);
+        var limits = new NativeMethods.JobObjectExtendedLimitInformation
+        {
+            BasicLimitInformation = new NativeMethods.JobObjectBasicLimitInformation
+            {
+                LimitFlags = NativeMethods.JobObjectLimitKillOnJobClose
+            }
+        };
+        if (!NativeMethods.SetInformationJobObject(
+                handle,
+                JobObjectExtendedLimitInformation,
+                ref limits,
+                (uint)Marshal.SizeOf<NativeMethods.JobObjectExtendedLimitInformation>()))
+        {
+            var exception = NativeMethods.LastError("Unable to configure the terminal process job.");
+            handle.Dispose();
+            throw exception;
+        }
+
+        return new ProcessJob(handle);
     }
 
     internal void Assign(SafeKernelHandle process)
@@ -31,6 +52,14 @@ internal sealed class ProcessJob : IDisposable
         if (!NativeMethods.AssignProcessToJobObject(_handle, process))
         {
             throw NativeMethods.LastError("Unable to assign the shell to its terminal process job.");
+        }
+    }
+
+    internal void Terminate(uint exitCode)
+    {
+        if (Volatile.Read(ref _disposed) == 0)
+        {
+            _ = NativeMethods.TerminateJobObject(_handle, exitCode);
         }
     }
 

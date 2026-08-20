@@ -14,7 +14,7 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
 
     internal event Action<string, string>? OutputReceived;
 
-    internal event Action<string, uint>? SessionExited;
+    internal event Action<string, TerminalExitStatus>? SessionExited;
 
     internal TerminalSessionManager(AppSettings settings, string startingDirectory)
     {
@@ -188,8 +188,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
     private void HandleOutput(TerminalSession session, string data) =>
         OutputReceived?.Invoke(session.Id, data);
 
-    private void HandleExit(TerminalSession session, uint exitCode) =>
-        SessionExited?.Invoke(session.Id, exitCode);
+    private void HandleExit(TerminalSession session, TerminalExitStatus status) =>
+        SessionExited?.Invoke(session.Id, status);
 
     public async ValueTask DisposeAsync()
     {

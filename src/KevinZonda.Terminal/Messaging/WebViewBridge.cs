@@ -209,7 +209,7 @@ internal sealed class WebViewBridge : IDisposable
         _outputQueues.GetOrAdd(sessionId, static _ => new ConcurrentQueue<string>()).Enqueue(data);
     }
 
-    private void QueueExit(string sessionId, uint exitCode)
+    private void QueueExit(string sessionId, TerminalExitStatus status)
     {
         if (Volatile.Read(ref _disposed) != 0 || _webView.IsDisposed)
         {
@@ -221,7 +221,11 @@ internal sealed class WebViewBridge : IDisposable
             _webView.BeginInvoke(() =>
             {
                 FlushSessionOutput(sessionId, drain: true);
-                Post("session.exited", sessionId: sessionId, payload: new { exitCode });
+                Post("session.exited", sessionId: sessionId, payload: new
+                {
+                    exitCode = status.ExitCode,
+                    failure = status.Failure
+                });
             });
         }
         catch (InvalidOperationException)

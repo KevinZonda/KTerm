@@ -23,6 +23,7 @@ internal sealed class OpenConsoleConHost : IConHost
     private readonly SafeFileHandle _signal;
     private readonly SafeFileHandle _reference;
     private readonly SafeKernelHandle _process;
+    private readonly Task<uint?> _exitTask;
     private int _disposed;
 
     private OpenConsoleConHost(
@@ -35,16 +36,20 @@ internal sealed class OpenConsoleConHost : IConHost
         _signal = signal;
         _reference = reference;
         _process = process;
+        _exitTask = ProcessWaiter.WaitForExit(_process);
     }
 
     public IntPtr PseudoConsoleHandle => _pseudoConsole;
+
+    public Task<uint?>? ExitTask => _exitTask;
 
     internal static OpenConsoleConHost Create(
         int columns,
         int rows,
         SafeFileHandle input,
         SafeFileHandle output,
-        string hostPath)
+        string hostPath,
+        ProcessJob processJob)
     {
         SafeFileHandle? server = null;
         SafeFileHandle? reference = null;
@@ -165,12 +170,22 @@ internal sealed class OpenConsoleConHost : IConHost
             Marshal.WriteIntPtr(pseudoConsole, IntPtr.Size, reference.DangerousGetHandle());
             Marshal.WriteIntPtr(pseudoConsole, 2 * IntPtr.Size, process.DangerousGetHandle());
 
+            processJob.Assign(process);
+
             var host = new OpenConsoleConHost(pseudoConsole, signalOurSide, reference, process);
             signalOurSide = null;
             reference = null;
             process = null;
             pseudoConsole = IntPtr.Zero;
             return host;
+        }
+        catch
+        {
+            if (process is not null && !process.IsInvalid && !process.IsClosed)
+            {
+                _ = NativeMethods.TerminateProcess(process.DangerousGetHandle(), 1);
+            }
+            throw;
         }
         finally
         {

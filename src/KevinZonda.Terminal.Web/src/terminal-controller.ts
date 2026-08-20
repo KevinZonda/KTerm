@@ -176,14 +176,16 @@ export class TerminalController {
     this.terminal.write(data);
   }
 
-  public markExited(exitCode: number): void {
+  public markExited(exitCode: number, failure?: string): void {
     if (this.exited) {
       return;
     }
 
     this.exited = true;
     this.element.classList.add('exited');
-    this.write(`\r\n\x1b[90m[process exited with code ${exitCode}]\x1b[0m\r\n`);
+    const message = failure ?? `process exited with code ${exitCode}`;
+    const color = failure ? '\x1b[91m' : '\x1b[90m';
+    this.write(`\r\n${color}[${message}]\x1b[0m\r\n`);
   }
 
   public focus(): void {

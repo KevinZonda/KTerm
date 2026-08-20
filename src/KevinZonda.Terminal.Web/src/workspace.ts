@@ -841,13 +841,16 @@ export class Workspace implements TerminalCallbacks {
       return;
     }
 
-    if (this.settings.shell.exitBehavior === 'CloseTab') {
+    const failure = this.payloadString(event, 'failure');
+    if (!failure && this.settings.shell.exitBehavior === 'CloseTab') {
       this.pendingExitedSessionIds.add(sessionId);
       this.drainExitedSessionClosures();
       return;
     }
 
-    this.terminals.get(sessionId)?.markExited(this.payloadNumber(event, 'exitCode'));
+    this.terminals.get(sessionId)?.markExited(
+      this.payloadNumber(event, 'exitCode'),
+      failure || undefined);
   }
 
   private render(): void {

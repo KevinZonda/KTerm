@@ -20,6 +20,8 @@ internal sealed class KernelConHost : IConHost
 
     public IntPtr PseudoConsoleHandle => _handle.DangerousGetHandle();
 
+    public Task<uint?>? ExitTask => null;
+
     internal static KernelConHost Create(int columns, int rows, SafeFileHandle input, SafeFileHandle output)
     {
         var result = NativeMethods.CreatePseudoConsole(

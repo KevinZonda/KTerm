@@ -14,6 +14,12 @@ internal interface IConHost : IDisposable
     /// </summary>
     IntPtr PseudoConsoleHandle { get; }
 
+    /// <summary>
+    /// Completes when a side-by-side console-host process exits. The inbox
+    /// pseudoconsole has no process handle exposed to KTerm and returns null.
+    /// </summary>
+    Task<uint?>? ExitTask { get; }
+
     /// <summary>Resizes the pseudoconsole. Throws on failure.</summary>
     void Resize(int columns, int rows);
 }

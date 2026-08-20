@@ -20,21 +20,29 @@ internal static class ConHost
     private const string StockFileName = "OpenConsole.exe";
     private const string EnhancedFileName = "OpenConsole.Enhanced.exe";
 
-    internal static IConHost Create(int columns, int rows, SafeFileHandle input, SafeFileHandle output, bool preferEnhanced)
+    internal static IConHost Create(
+        int columns,
+        int rows,
+        SafeFileHandle input,
+        SafeFileHandle output,
+        bool preferEnhanced,
+        ProcessJob processJob)
     {
         var forced = Environment.GetEnvironmentVariable("KTERM_CONHOST");
         if (!string.Equals(forced, "kernel", StringComparison.OrdinalIgnoreCase))
         {
             if (preferEnhanced || string.Equals(forced, "enhanced", StringComparison.OrdinalIgnoreCase))
             {
-                var enhanced = TryCreateOpenConsole(columns, rows, input, output, EnhancedFileName);
+                var enhanced = TryCreateOpenConsole(
+                    columns, rows, input, output, EnhancedFileName, processJob);
                 if (enhanced is not null)
                 {
                     return enhanced;
                 }
             }
 
-            var stock = TryCreateOpenConsole(columns, rows, input, output, StockFileName);
+            var stock = TryCreateOpenConsole(
+                columns, rows, input, output, StockFileName, processJob);
             if (stock is not null)
             {
                 return stock;
@@ -44,7 +52,13 @@ internal static class ConHost
         return KernelConHost.Create(columns, rows, input, output);
     }
 
-    private static IConHost? TryCreateOpenConsole(int columns, int rows, SafeFileHandle input, SafeFileHandle output, string fileName)
+    private static IConHost? TryCreateOpenConsole(
+        int columns,
+        int rows,
+        SafeFileHandle input,
+        SafeFileHandle output,
+        string fileName,
+        ProcessJob processJob)
     {
         var hostPath = FindOpenConsole(fileName);
         if (hostPath is null)
@@ -54,7 +68,7 @@ internal static class ConHost
 
         try
         {
-            return OpenConsoleConHost.Create(columns, rows, input, output, hostPath);
+            return OpenConsoleConHost.Create(columns, rows, input, output, hostPath, processJob);
         }
         catch (Exception error)
         {

@@ -23,6 +23,7 @@ internal static partial class NativeMethods
     internal const uint CreateSuspended = 0x0000_0004;
     internal const uint WaitObject0 = 0x0000_0000;
     internal const uint WaitTimeout = 0x0000_0102;
+    internal const uint JobObjectLimitKillOnJobClose = 0x0000_2000;
     internal const uint GenericRead = 0x8000_0000;
     internal const uint GenericWrite = 0x4000_0000;
     internal const uint FileShareRead = 0x0000_0001;
@@ -106,6 +107,42 @@ internal static partial class NativeMethods
         internal IntPtr hThread;
         internal uint dwProcessId;
         internal uint dwThreadId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct JobObjectBasicLimitInformation
+    {
+        internal long PerProcessUserTimeLimit;
+        internal long PerJobUserTimeLimit;
+        internal uint LimitFlags;
+        internal UIntPtr MinimumWorkingSetSize;
+        internal UIntPtr MaximumWorkingSetSize;
+        internal uint ActiveProcessLimit;
+        internal UIntPtr Affinity;
+        internal uint PriorityClass;
+        internal uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct IoCounters
+    {
+        internal ulong ReadOperationCount;
+        internal ulong WriteOperationCount;
+        internal ulong OtherOperationCount;
+        internal ulong ReadTransferCount;
+        internal ulong WriteTransferCount;
+        internal ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct JobObjectExtendedLimitInformation
+    {
+        internal JobObjectBasicLimitInformation BasicLimitInformation;
+        internal IoCounters IoInfo;
+        internal UIntPtr ProcessMemoryLimit;
+        internal UIntPtr JobMemoryLimit;
+        internal UIntPtr PeakProcessMemoryUsed;
+        internal UIntPtr PeakJobMemoryUsed;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -212,6 +249,20 @@ internal static partial class NativeMethods
     internal static extern bool AssignProcessToJobObject(
         SafeKernelHandle hJob,
         SafeKernelHandle hProcess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool TerminateJobObject(
+        SafeKernelHandle hJob,
+        uint uExitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetInformationJobObject(
+        SafeKernelHandle hJob,
+        int jobObjectInformationClass,
+        ref JobObjectExtendedLimitInformation lpJobObjectInformation,
+        uint cbJobObjectInformationLength);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -63,7 +63,7 @@ internal sealed class TerminalSession : IAsyncDisposable
 
     internal event Action<TerminalSession, string>? OutputReceived;
 
-    internal event Action<TerminalSession, uint>? Exited;
+    internal event Action<TerminalSession, TerminalExitStatus>? Exited;
 
     internal void StartPumps()
     {
@@ -73,7 +73,7 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
 
         _readTask = Task.Run(ReadLoop);
-        _waitTask = Task.Run(WaitForExit);
+        _waitTask = WaitForExit();
         _paletteTask = ApplyConsoleThemeAfterStartup();
     }
 
@@ -112,7 +112,14 @@ internal sealed class TerminalSession : IAsyncDisposable
 
         try
         {
-            conHost = ConHost.Create(columns, rows, pseudoInput, pseudoOutput, enhancedOpenConsole);
+            processJob = ProcessJob.Create();
+            conHost = ConHost.Create(
+                columns,
+                rows,
+                pseudoInput,
+                pseudoOutput,
+                enhancedOpenConsole,
+                processJob);
 
             pseudoInput.Dispose();
             pseudoOutput.Dispose();
@@ -179,7 +186,6 @@ internal sealed class TerminalSession : IAsyncDisposable
 
             threadHandle = processInformation.hThread;
             process = new SafeKernelHandle(processInformation.hProcess);
-            processJob = ProcessJob.Create();
             processJob.Assign(process);
             if (NativeMethods.ResumeThread(threadHandle) == uint.MaxValue)
             {
@@ -389,24 +395,49 @@ internal sealed class TerminalSession : IAsyncDisposable
         }
     }
 
-    private void WaitForExit()
+    private async Task WaitForExit()
     {
-        var waitResult = NativeMethods.WaitForSingleObject(_process.DangerousGetHandle(), uint.MaxValue);
-        if (waitResult != NativeMethods.WaitObject0)
+        var shellExitTask = ProcessWaiter.WaitForExit(_process);
+        var hostExitTask = _conHost.ExitTask;
+        if (hostExitTask is null)
+        {
+            var shellExitCode = await shellExitTask.ConfigureAwait(false);
+            if (shellExitCode is { } code)
+            {
+                RaiseExited(new TerminalExitStatus(code, null));
+            }
+            return;
+        }
+
+        var completed = await Task.WhenAny(shellExitTask, hostExitTask).ConfigureAwait(false);
+        if (completed == shellExitTask)
+        {
+            var shellExitCode = await shellExitTask.ConfigureAwait(false);
+            if (shellExitCode is { } code)
+            {
+                RaiseExited(new TerminalExitStatus(code, null));
+            }
+            return;
+        }
+
+        var hostExitCode = await hostExitTask.ConfigureAwait(false) ?? uint.MaxValue;
+        if (Volatile.Read(ref _disposed) != 0)
         {
             return;
         }
 
-        var exitCode = 0u;
-        _ = NativeMethods.GetExitCodeProcess(_process.DangerousGetHandle(), out exitCode);
-        RaiseExited(exitCode);
+        RaiseExited(new TerminalExitStatus(
+            hostExitCode,
+            $"terminal host exited unexpectedly with code {hostExitCode}"));
+
+        _processJob.Terminate(1);
     }
 
-    private void RaiseExited(uint exitCode)
+    private void RaiseExited(TerminalExitStatus status)
     {
         if (Interlocked.Exchange(ref _exitRaised, 1) == 0)
         {
-            Exited?.Invoke(this, exitCode);
+            Exited?.Invoke(this, status);
         }
     }
 
@@ -450,3 +481,5 @@ internal sealed class TerminalSession : IAsyncDisposable
     }
 
 }
+
+internal sealed record TerminalExitStatus(uint ExitCode, string? Failure);
