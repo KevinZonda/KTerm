@@ -42,7 +42,7 @@ internal sealed class SettingsForm : Form
         Text = "KevinZonda Terminal Settings";
         BackColor = SurfaceColor;
         ForeColor = Color.FromArgb(216, 222, 233);
-        ClientSize = new Size(520, 430);
+        ClientSize = new Size(520, 480);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
