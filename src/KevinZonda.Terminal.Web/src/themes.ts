@@ -1,7 +1,6 @@
 import type { ITheme } from '@xterm/xterm';
 
 export const DEFAULT_THEME_NAME = 'KevinZonda Terminal Dark';
-const LEGACY_DEFAULT_THEME_NAME = 'KTerm Dark';
 
 interface TerminalThemePreset {
   name: string;
@@ -46,15 +45,59 @@ const TERMINAL_THEMES: TerminalThemePreset[] = [
       brightYellow: '#fce94f', brightBlue: '#729fcf', brightMagenta: '#ad7fa8',
       brightCyan: '#34e2e2', brightWhite: '#eeeeec'
     }
+  },
+  {
+    name: 'Campbell Powershell',
+    theme: {
+      background: '#012456', foreground: '#CCCCCC', cursor: '#FFFFFF',
+      cursorAccent: '#012456', selectionBackground: '#3b5268',
+      black: '#0C0C0C', red: '#C50F1F', green: '#13A10E', yellow: '#C19C00',
+      blue: '#0037DA', magenta: '#881798', cyan: '#3A96DD', white: '#CCCCCC',
+      brightBlack: '#767676', brightRed: '#E74856', brightGreen: '#16C60C',
+      brightYellow: '#F9F1A5', brightBlue: '#3B78FF', brightMagenta: '#B4009E',
+      brightCyan: '#61D6D6', brightWhite: '#F2F2F2'
+    }
+  },
+  {
+    name: 'Builtin Tango Dark',
+    theme: {
+      background: '#000000', foreground: '#ffffff', cursor: '#ffffff',
+      cursorAccent: '#000000', selectionBackground: '#b5d5ff',
+      black: '#000000', red: '#cc0000', green: '#4e9a06', yellow: '#c4a000',
+      blue: '#3465a4', magenta: '#75507b', cyan: '#06989a', white: '#d3d7cf',
+      brightBlack: '#555753', brightRed: '#ef2929', brightGreen: '#8ae234',
+      brightYellow: '#fce94f', brightBlue: '#729fcf', brightMagenta: '#ad7fa8',
+      brightCyan: '#34e2e2', brightWhite: '#eeeeec'
+    }
+  },
+  {
+    name: 'Campbell',
+    theme: {
+      background: '#0C0C0C', foreground: '#CCCCCC', cursor: '#FFFFFF',
+      cursorAccent: '#0C0C0C', selectionBackground: '#3b5268',
+      black: '#0C0C0C', red: '#C50F1F', green: '#13A10E', yellow: '#C19C00',
+      blue: '#0037DA', magenta: '#881798', cyan: '#3A96DD', white: '#CCCCCC',
+      brightBlack: '#767676', brightRed: '#E74856', brightGreen: '#16C60C',
+      brightYellow: '#F9F1A5', brightBlue: '#3B78FF', brightMagenta: '#B4009E',
+      brightCyan: '#61D6D6', brightWhite: '#F2F2F2'
+    }
+  },
+  {
+    name: 'IBM 5153',
+    theme: {
+      background: '#000000', foreground: '#AAAAAA', cursor: '#00AA00',
+      cursorAccent: '#000000', selectionBackground: '#FFFFFF',
+      black: '#000000', red: '#AA0000', green: '#00AA00', yellow: '#C47E00',
+      blue: '#0000AA', magenta: '#AA00AA', cyan: '#00AAAA', white: '#AAAAAA',
+      brightBlack: '#555555', brightRed: '#FF5555', brightGreen: '#55FF55',
+      brightYellow: '#FFFF55', brightBlue: '#5555FF', brightMagenta: '#FF55FF',
+      brightCyan: '#55FFFF', brightWhite: '#FFFFFF'
+    }
   }
 ];
 
 export function normalizeTerminalThemeName(name: unknown): string {
   if (typeof name !== 'string') {
-    return DEFAULT_THEME_NAME;
-  }
-
-  if (name.toLowerCase() === LEGACY_DEFAULT_THEME_NAME.toLowerCase()) {
     return DEFAULT_THEME_NAME;
   }
 
