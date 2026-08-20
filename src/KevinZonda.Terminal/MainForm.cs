@@ -17,6 +17,7 @@ internal sealed class MainForm : Form
     private const string AppHostName = "com.kevinzonda.terminal";
     private const int SystemCommandSettings = 0x1000;
     private const int SystemCommandAbout = 0x1001;
+    private const long PreviousKeyStateMask = 1L << 30;
     private static readonly Color FrameColor = Color.FromArgb(23, 27, 34);
     private static readonly Color FrameBorderColor = Color.FromArgb(48, 56, 69);
     private static readonly Color FrameTextColor = Color.FromArgb(216, 222, 233);
@@ -26,6 +27,7 @@ internal sealed class MainForm : Form
     private readonly AgentUsageStatusService _agentUsage;
     private readonly SystemMetricsService _systemMetrics;
     private readonly SettingsStore _settingsStore = new();
+    private readonly string _startingDirectory;
     private AppSettings _settings;
     private WebViewBridge? _bridge;
     private CoreWebView2Environment? _webViewEnvironment;
@@ -35,6 +37,7 @@ internal sealed class MainForm : Form
 
     internal MainForm(string startingDirectory)
     {
+        _startingDirectory = startingDirectory;
         _settings = _settingsStore.Load();
         _sessions = new TerminalSessionManager(_settings, startingDirectory);
         _agentUsage = new AgentUsageStatusService(_sessions, _settings);
@@ -411,6 +414,16 @@ internal sealed class MainForm : Form
 
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
+        if ((keyData & Keys.Modifiers) == (Keys.Control | Keys.Shift) &&
+            (keyData & Keys.KeyCode) == Keys.N)
+        {
+            if ((message.LParam.ToInt64() & PreviousKeyStateMask) == 0)
+            {
+                LaunchNewInstance();
+            }
+            return true;
+        }
+
         if ((keyData & Keys.Modifiers) == Keys.Alt)
         {
             if ((keyData & Keys.KeyCode) == Keys.S)
@@ -437,6 +450,57 @@ internal sealed class MainForm : Form
         }
 
         return base.ProcessCmdKey(ref message, keyData);
+    }
+
+    private void LaunchNewInstance()
+    {
+        try
+        {
+            var executablePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                throw new FileNotFoundException("Unable to locate the KevinZonda Terminal executable.");
+            }
+
+            var startInfo = new ProcessStartInfo(executablePath)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = _startingDirectory
+            };
+
+            // Environment.ProcessPath points to dotnet.exe when the app is
+            // launched as `dotnet KevinZonda.Terminal.dll` during development.
+            if (string.Equals(
+                Path.GetFileNameWithoutExtension(executablePath),
+                "dotnet",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                var assemblyPath = typeof(MainForm).Assembly.Location;
+                if (string.IsNullOrWhiteSpace(assemblyPath))
+                {
+                    throw new FileNotFoundException("Unable to locate the KevinZonda Terminal assembly.");
+                }
+                startInfo.ArgumentList.Add(assemblyPath);
+            }
+
+            startInfo.ArgumentList.Add(_startingDirectory);
+            if (Process.Start(startInfo) is null)
+            {
+                throw new InvalidOperationException("Windows did not start the new KevinZonda Terminal instance.");
+            }
+        }
+        catch (Exception exception) when (
+            exception is System.ComponentModel.Win32Exception or
+                FileNotFoundException or
+                InvalidOperationException)
+        {
+            MessageBox.Show(
+                this,
+                $"Unable to open a new KevinZonda Terminal window.\n\n{exception.Message}",
+                "KevinZonda Terminal",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private void ShowAbout()
