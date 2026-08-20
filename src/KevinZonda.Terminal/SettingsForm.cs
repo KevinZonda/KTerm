@@ -28,6 +28,7 @@ internal sealed class SettingsForm : Form
     private readonly Button _shellBrowse = new();
     private readonly ComboBox _msys2Environment = new();
     private readonly CheckBox _inheritWindowsPath = new();
+    private readonly ComboBox _shellExitBehavior = new();
     private readonly CheckBox _enhancedOpenConsole = new();
     private readonly List<Font> _previewFonts = [];
     private TabPage? _shellPage;
@@ -53,6 +54,7 @@ internal sealed class SettingsForm : Form
         PopulateThemes();
         PopulateShellProfiles();
         PopulateMsys2Environments();
+        PopulateShellExitBehaviors();
         ApplyValues(settings);
     }
 
@@ -253,11 +255,11 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 1,
-            RowCount = 11,
+            RowCount = 13,
             BackColor = SurfaceColor,
             Margin = new Padding(0)
         };
-        for (var row = 0; row < 11; row++)
+        for (var row = 0; row < 13; row++)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
@@ -314,18 +316,24 @@ internal sealed class SettingsForm : Form
         _inheritWindowsPath.UseVisualStyleBackColor = false;
         layout.Controls.Add(_inheritWindowsPath, 0, 8);
 
+        layout.Controls.Add(CreateLabel("When the shell exits"), 0, 9);
+        ConfigureField(_shellExitBehavior);
+        _shellExitBehavior.DropDownStyle = ComboBoxStyle.DropDownList;
+        _shellExitBehavior.Margin = new Padding(0, 5, 0, 12);
+        layout.Controls.Add(_shellExitBehavior, 0, 10);
+
         _enhancedOpenConsole.AutoSize = true;
         _enhancedOpenConsole.Text = "Enable enhanced OpenConsole (repaints static screen content after resize)";
         _enhancedOpenConsole.BackColor = SurfaceColor;
         _enhancedOpenConsole.ForeColor = Color.FromArgb(216, 222, 233);
         _enhancedOpenConsole.Margin = new Padding(0);
         _enhancedOpenConsole.UseVisualStyleBackColor = false;
-        layout.Controls.Add(_enhancedOpenConsole, 0, 9);
+        layout.Controls.Add(_enhancedOpenConsole, 0, 11);
 
         var conHostHint = CreateLabel(
             "Applies to new terminal tabs. Set KTERM_CONHOST=kernel to force the system console.");
         conHostHint.ForeColor = Color.FromArgb(140, 148, 160);
-        layout.Controls.Add(conHostHint, 0, 10);
+        layout.Controls.Add(conHostHint, 0, 12);
 
         page.Controls.Add(layout);
         return page;
@@ -519,6 +527,16 @@ internal sealed class SettingsForm : Form
         _inheritWindowsPath.Checked = true;
     }
 
+    private void PopulateShellExitBehaviors()
+    {
+        _shellExitBehavior.Items.AddRange(
+        [
+            ShellSettings.KeepTabExitBehavior,
+            ShellSettings.CloseTabExitBehavior
+        ]);
+        _shellExitBehavior.SelectedItem = ShellSettings.KeepTabExitBehavior;
+    }
+
     private void ApplyValues(AppSettings settings)
     {
         var normalized = AppSettings.Normalize(settings);
@@ -564,6 +582,7 @@ internal sealed class SettingsForm : Form
             _msys2Environment.SelectedItem = ShellProfileCatalog.FindMsys2Environment(
                 settings.Msys2Environment);
             _inheritWindowsPath.Checked = settings.InheritWindowsPath;
+            _shellExitBehavior.SelectedItem = settings.ExitBehavior;
             _shellExecutable.ReadOnly = profile.Id == ShellProfileCatalog.AutoId;
             _shellBrowse.Enabled = profile.Id != ShellProfileCatalog.AutoId;
             UpdateMsys2Controls(profile);
@@ -611,7 +630,9 @@ internal sealed class SettingsForm : Form
                 : _shellArguments.Text,
             Msys2Environment = (_msys2Environment.SelectedItem as Msys2EnvironmentDefinition)?.Id
                 ?? ShellProfileCatalog.DefaultMsys2Environment,
-            InheritWindowsPath = _inheritWindowsPath.Checked
+            InheritWindowsPath = _inheritWindowsPath.Checked,
+            ExitBehavior = _shellExitBehavior.SelectedItem as string
+                ?? ShellSettings.KeepTabExitBehavior
         };
     }
 

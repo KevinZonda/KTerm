@@ -96,6 +96,9 @@ internal sealed record IndicatorSettings
 
 internal sealed record ShellSettings
 {
+    internal const string KeepTabExitBehavior = "KeepTab";
+    internal const string CloseTabExitBehavior = "CloseTab";
+
     public string Profile { get; init; } = ShellProfileCatalog.AutoId;
 
     public string? Executable { get; init; }
@@ -105,6 +108,15 @@ internal sealed record ShellSettings
     public string Msys2Environment { get; init; } = ShellProfileCatalog.DefaultMsys2Environment;
 
     public bool InheritWindowsPath { get; init; } = true;
+
+    public string ExitBehavior { get; init; } = KeepTabExitBehavior;
+
+    internal bool HasSameLaunchConfiguration(ShellSettings other) =>
+        Profile == other.Profile &&
+        Executable == other.Executable &&
+        Arguments == other.Arguments &&
+        Msys2Environment == other.Msys2Environment &&
+        InheritWindowsPath == other.InheritWindowsPath;
 
     internal static ShellSettings Normalize(ShellSettings? settings)
     {
@@ -118,7 +130,10 @@ internal sealed record ShellSettings
             Arguments = arguments,
             Msys2Environment = ShellProfileCatalog.NormalizeMsys2Environment(
                 settings?.Msys2Environment),
-            InheritWindowsPath = settings?.InheritWindowsPath ?? true
+            InheritWindowsPath = settings?.InheritWindowsPath ?? true,
+            ExitBehavior = settings?.ExitBehavior == CloseTabExitBehavior
+                ? CloseTabExitBehavior
+                : KeepTabExitBehavior
         };
     }
 

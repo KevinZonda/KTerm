@@ -211,7 +211,11 @@ internal sealed class WebViewBridge : IDisposable
 
         try
         {
-            _webView.BeginInvoke(() => Post("session.exited", sessionId: sessionId, payload: new { exitCode }));
+            _webView.BeginInvoke(() =>
+            {
+                FlushSessionOutput(sessionId, drain: true);
+                Post("session.exited", sessionId: sessionId, payload: new { exitCode });
+            });
         }
         catch (InvalidOperationException)
         {
@@ -252,13 +256,21 @@ internal sealed class WebViewBridge : IDisposable
 
     private void FlushOutput(object? sender, EventArgs eventArgs)
     {
-        foreach (var (sessionId, queue) in _outputQueues)
+        foreach (var sessionId in _outputQueues.Keys)
         {
-            if (queue.IsEmpty)
-            {
-                continue;
-            }
+            FlushSessionOutput(sessionId);
+        }
+    }
 
+    private void FlushSessionOutput(string sessionId, bool drain = false)
+    {
+        if (!_outputQueues.TryGetValue(sessionId, out var queue) || queue.IsEmpty)
+        {
+            return;
+        }
+
+        do
+        {
             var builder = new StringBuilder();
             while (builder.Length < MaxOutputBatchChars && queue.TryDequeue(out var chunk))
             {
@@ -269,11 +281,11 @@ internal sealed class WebViewBridge : IDisposable
             {
                 Post("session.output", sessionId: sessionId, payload: new { data = builder.ToString() });
             }
+        } while (drain && !queue.IsEmpty);
 
-            if (queue.IsEmpty)
-            {
-                _outputQueues.TryRemove(new KeyValuePair<string, ConcurrentQueue<string>>(sessionId, queue));
-            }
+        if (queue.IsEmpty)
+        {
+            _outputQueues.TryRemove(new KeyValuePair<string, ConcurrentQueue<string>>(sessionId, queue));
         }
     }
 

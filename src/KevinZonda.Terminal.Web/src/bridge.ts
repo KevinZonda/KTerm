@@ -16,6 +16,7 @@ export interface AppSettings {
   font: FontSettings;
   theme: ThemeSettings;
   indicators: IndicatorSettings;
+  shell: ShellSettings;
 }
 
 export interface ThemeSettings {
@@ -26,6 +27,10 @@ export interface IndicatorSettings {
   showWorkspaceIndicator: boolean;
   showRemainingUsage: boolean;
   autoRenewKimiToken: boolean;
+}
+
+export interface ShellSettings {
+  exitBehavior: 'KeepTab' | 'CloseTab';
 }
 
 export interface AgentUsageWindow {
@@ -99,6 +104,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     showWorkspaceIndicator: true,
     showRemainingUsage: false,
     autoRenewKimiToken: false
+  },
+  shell: {
+    exitBehavior: 'KeepTab'
   }
 };
 
@@ -196,6 +204,9 @@ export class NativeBridge {
     const indicators = typeof partialSettings.indicators === 'object' && partialSettings.indicators !== null
       ? partialSettings.indicators
       : DEFAULT_SETTINGS.indicators;
+    const shell = typeof partialSettings.shell === 'object' && partialSettings.shell !== null
+      ? partialSettings.shell
+      : DEFAULT_SETTINGS.shell;
 
     const family = typeof font.family === 'string' && font.family.trim()
       ? font.family.trim()
@@ -214,6 +225,9 @@ export class NativeBridge {
         showWorkspaceIndicator: indicators.showWorkspaceIndicator !== false,
         showRemainingUsage: indicators.showRemainingUsage === true,
         autoRenewKimiToken: indicators.autoRenewKimiToken === true
+      },
+      shell: {
+        exitBehavior: shell.exitBehavior === 'CloseTab' ? 'CloseTab' : 'KeepTab'
       }
     };
   }

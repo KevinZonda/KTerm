@@ -114,7 +114,8 @@ internal sealed class TerminalSessionManager : IAsyncDisposable
         Task<TerminalSession>? previousPrewarm;
         lock (_prewarmLock)
         {
-            if (_settings.Shell == settings.Shell && _settings.Theme == settings.Theme &&
+            if (_settings.Shell.HasSameLaunchConfiguration(settings.Shell) &&
+                _settings.Theme == settings.Theme &&
                 _settings.ConHost == settings.ConHost)
             {
                 return;
