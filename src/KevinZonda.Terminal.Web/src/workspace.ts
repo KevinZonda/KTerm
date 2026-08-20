@@ -86,6 +86,10 @@ export class Workspace implements TerminalCallbacks {
   private fontSaveTimer?: number;
   private peekOpenTimer?: number;
   private peekCloseTimer?: number;
+  // Prevent a delayed edge peek from opening after the pointer has already
+  // crossed out of the WebView, which is common between adjacent displays.
+  private pointerInsideViewport = false;
+  private lastPointerClientX = Number.POSITIVE_INFINITY;
   private usageTooltipOpenTimer?: number;
   private usageTooltipCloseTimer?: number;
   private activeUsageAnchor?: HTMLElement;
@@ -134,6 +138,7 @@ export class Workspace implements TerminalCallbacks {
 
     window.addEventListener('keydown', this.handleKeyboard, { capture: true });
     window.addEventListener('pointermove', this.handleEdgePointerMove, { passive: true });
+    document.documentElement.addEventListener('pointerleave', this.handleViewportPointerLeave);
     window.addEventListener('blur', this.handleWindowBlur);
     window.addEventListener('resize', () => this.hideAgentUsageTooltip());
   }
@@ -619,6 +624,9 @@ export class Workspace implements TerminalCallbacks {
   }
 
   private readonly handleEdgePointerMove = (event: PointerEvent): void => {
+    this.pointerInsideViewport = true;
+    this.lastPointerClientX = event.clientX;
+
     if (this.sidebarMode !== 'hidden') {
       return;
     }
@@ -631,7 +639,9 @@ export class Workspace implements TerminalCallbacks {
     if (this.peekOpenTimer === undefined) {
       this.peekOpenTimer = window.setTimeout(() => {
         this.peekOpenTimer = undefined;
-        if (this.sidebarMode === 'hidden') {
+        if (this.sidebarMode === 'hidden' &&
+            this.pointerInsideViewport &&
+            this.lastPointerClientX <= Workspace.EDGE_TRIGGER_WIDTH) {
           this.setSidebarMode('peek');
         }
       }, Workspace.PEEK_OPEN_DELAY);
@@ -652,11 +662,20 @@ export class Workspace implements TerminalCallbacks {
   };
 
   private readonly handleWindowBlur = (): void => {
+    this.pointerInsideViewport = false;
+    this.lastPointerClientX = Number.POSITIVE_INFINITY;
     this.cancelPeekOpen();
     this.hideAgentUsageTooltip();
     if (this.sidebarMode === 'peek') {
       this.setSidebarMode('hidden');
     }
+  };
+
+  private readonly handleViewportPointerLeave = (): void => {
+    this.pointerInsideViewport = false;
+    this.lastPointerClientX = Number.POSITIVE_INFINITY;
+    this.cancelPeekOpen();
+    this.schedulePeekClose();
   };
 
   private schedulePeekClose(): void {
