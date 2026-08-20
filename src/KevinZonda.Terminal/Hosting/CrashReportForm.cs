@@ -18,11 +18,11 @@ internal sealed class CrashReportForm : Form
         Text = "KTerm crashed";
         BackColor = BackgroundColor;
         ForeColor = ForegroundColor;
-        ClientSize = new Size(620, 330);
-        MinimumSize = new Size(560, 300);
+        ClientSize = new Size(720, 500);
+        MinimumSize = new Size(620, 420);
         StartPosition = FormStartPosition.Manual;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
         MinimizeBox = false;
         ShowInTaskbar = true;
 
@@ -54,7 +54,7 @@ internal sealed class CrashReportForm : Form
         var summary = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(560, 0),
+            MaximumSize = new Size(660, 0),
             Margin = new Padding(0, 12, 0, 16),
             ForeColor = MutedColor,
             Text = "The terminal sessions from the crashed window cannot be recovered. " +
@@ -67,12 +67,14 @@ internal sealed class CrashReportForm : Form
             Dock = DockStyle.Fill,
             ReadOnly = true,
             Multiline = true,
+            MinimumSize = new Size(0, 180),
             BackColor = SurfaceColor,
             ForeColor = ForegroundColor,
             BorderStyle = BorderStyle.FixedSingle,
-            ScrollBars = ScrollBars.Vertical,
-            Text = $"Exit code: {exitCode} (0x{unchecked((uint)exitCode).ToString("X8", CultureInfo.InvariantCulture)})" +
-                Environment.NewLine + $"Crash report: {_reportPath}"
+            Font = new Font(FontFamily.GenericMonospace, 9F),
+            ScrollBars = ScrollBars.Both,
+            WordWrap = false,
+            Text = BuildReportPreview(reportPath, exitCode)
         };
         layout.Controls.Add(details, 0, 2);
 
@@ -131,6 +133,24 @@ internal sealed class CrashReportForm : Form
         Text = text,
         UseVisualStyleBackColor = false
     };
+
+    private static string BuildReportPreview(string reportPath, int exitCode)
+    {
+        var header =
+            $"Exit code: {exitCode} (0x{unchecked((uint)exitCode).ToString("X8", CultureInfo.InvariantCulture)})" +
+            Environment.NewLine + $"Crash report: {reportPath}";
+        try
+        {
+            return File.Exists(reportPath)
+                ? header + Environment.NewLine + Environment.NewLine + File.ReadAllText(reportPath)
+                : header + Environment.NewLine + Environment.NewLine + "Crash report is unavailable.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return header + Environment.NewLine + Environment.NewLine +
+                $"KTerm could not read the crash report: {exception.Message}";
+        }
+    }
 
     private void OpenReport()
     {
