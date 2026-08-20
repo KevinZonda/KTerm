@@ -25,7 +25,7 @@ internal static class ShellProfileCatalog
     internal const string PowerShell7Id = "powershell-7";
     internal const string WindowsPowerShellId = "windows-powershell";
     internal const string CommandPromptId = "command-prompt";
-    internal const string Msys2ZshId = "msys2-zsh";
+    internal const string Msys2Id = "msys2";
     internal const string GitBashId = "git-bash";
     internal const string CustomId = "custom";
     internal const string NoMsys2Environment = "none";
@@ -47,7 +47,7 @@ internal static class ShellProfileCatalog
         new(PowerShell7Id, "PowerShell 7", string.Empty),
         new(WindowsPowerShellId, "Windows PowerShell", string.Empty),
         new(CommandPromptId, "Command Prompt", string.Empty),
-        new(Msys2ZshId, "MSYS2 zsh", "-l -i"),
+        new(Msys2Id, "MSYS2", "-l -i"),
         new(GitBashId, "Git Bash", "--login -i"),
         new(CustomId, "Custom executable", string.Empty)
     ];
@@ -72,7 +72,7 @@ internal static class ShellProfileCatalog
         return profile.Id switch
         {
             AutoId => ResolveAuto(),
-            Msys2ZshId => CreateMsys2Zsh(profile, normalized),
+            Msys2Id => CreateMsys2Zsh(profile, normalized),
             _ => Create(profile, normalized)
         };
     }

@@ -341,7 +341,7 @@ internal sealed class SettingsForm : Form
 
     private void UpdateMsys2Controls(ShellProfileDefinition profile)
     {
-        var enabled = profile.Id == ShellProfileCatalog.Msys2ZshId;
+        var enabled = profile.Id == ShellProfileCatalog.Msys2Id;
         _msys2Environment.Enabled = enabled;
         _inheritWindowsPath.Enabled = enabled;
     }
