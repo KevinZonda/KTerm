@@ -15,6 +15,7 @@ internal sealed class SettingsForm : Form
     private readonly ComboBox _fontFamily = new();
     private readonly NumericUpDown _fontSize = new();
     private readonly NumericUpDown _lineHeight = new();
+    private readonly CheckBox _enableLigatures = new();
     private readonly Label _preview = new();
     private readonly ComboBox _themeName = new();
     private readonly Panel _themePreview = new();
@@ -67,7 +68,8 @@ internal sealed class SettingsForm : Form
         {
             Family = _fontFamily.Text,
             Size = decimal.ToDouble(_fontSize.Value),
-            LineHeight = decimal.ToDouble(_lineHeight.Value)
+            LineHeight = decimal.ToDouble(_lineHeight.Value),
+            EnableLigatures = _enableLigatures.Checked
         },
         Theme = new ThemeSettings
         {
@@ -200,7 +202,7 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 2,
-            RowCount = 6,
+            RowCount = 7,
             Margin = new Padding(0)
         };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
@@ -241,6 +243,15 @@ internal sealed class SettingsForm : Form
         _cursorBlink.Margin = new Padding(10, 8, 0, 16);
         _cursorBlink.UseVisualStyleBackColor = false;
         fields.Controls.Add(_cursorBlink, 1, 5);
+
+        _enableLigatures.AutoSize = true;
+        _enableLigatures.Text = "Enable ligatures";
+        _enableLigatures.ForeColor = ForeColor;
+        _enableLigatures.BackColor = SurfaceColor;
+        _enableLigatures.Margin = new Padding(0, 0, 0, 16);
+        _enableLigatures.UseVisualStyleBackColor = false;
+        fields.Controls.Add(_enableLigatures, 0, 6);
+        fields.SetColumnSpan(_enableLigatures, 2);
         layout.Controls.Add(fields, 0, 0);
 
         var previewPanel = new Panel
@@ -576,6 +587,7 @@ internal sealed class SettingsForm : Form
             _fontFamily.Text = normalized.Font.Family;
             _fontSize.Value = (decimal)normalized.Font.Size;
             _lineHeight.Value = (decimal)normalized.Font.LineHeight;
+            _enableLigatures.Checked = normalized.Font.EnableLigatures;
             _themeName.SelectedItem = normalized.Theme.Name;
             if (_themeName.SelectedIndex < 0)
             {

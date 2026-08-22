@@ -10,6 +10,7 @@ export interface FontSettings {
   family: string;
   size: number;
   lineHeight: number;
+  enableLigatures: boolean;
 }
 
 export interface AppSettings {
@@ -101,7 +102,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   font: {
     family: 'Cascadia Mono, Cascadia Code, Consolas, Microsoft YaHei, monospace',
     size: 14,
-    lineHeight: 1.12
+    lineHeight: 1.12,
+    enableLigatures: false
   },
   theme: {
     name: DEFAULT_THEME_NAME
@@ -236,7 +238,12 @@ export class NativeBridge {
       : DEFAULT_SETTINGS.font.lineHeight;
 
     return {
-      font: { family, size, lineHeight },
+      font: {
+        family,
+        size,
+        lineHeight,
+        enableLigatures: font.enableLigatures === true
+      },
       theme: { name: normalizeTerminalThemeName(theme.name) },
       cursor: {
         shape: cursor.shape === 'block' || cursor.shape === 'underline'

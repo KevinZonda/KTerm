@@ -11,6 +11,9 @@ importers:
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.299
         version: 0.12.0-beta.299(@xterm/xterm@6.1.0-beta.302)
+      '@xterm/addon-ligatures':
+        specifier: 0.11.0-beta.299
+        version: 0.11.0-beta.299(@xterm/xterm@6.1.0-beta.302)
       '@xterm/addon-web-links':
         specifier: 0.13.0-beta.299
         version: 0.13.0-beta.299(@xterm/xterm@6.1.0-beta.302)
@@ -257,6 +260,12 @@ packages:
     peerDependencies:
       '@xterm/xterm': ^6.1.0-beta.301
 
+  '@xterm/addon-ligatures@0.11.0-beta.299':
+    resolution: {integrity: sha512-+LQqYRdsrBeVLsqizO6whEpHlSUKjJWp53mf4m+9ynDTAXu2YcGB33h4etby8lDLUsh/vXeLZPW4U2rZWK1ILg==}
+    engines: {node: '>8.0.0'}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.301
+
   '@xterm/addon-web-links@0.13.0-beta.299':
     resolution: {integrity: sha512-br9eKXtyRVcYelnmnjgZChlMTV+ut0gnwIVSCabxDw1zCe247R7bIgGeWOz9dYmrfA61JM4FdfjLWhdsKydXzg==}
     peerDependencies:
@@ -362,9 +371,17 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
+  lru-cache@11.5.2:
+    resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
+    engines: {node: 20 || >=22}
+
   nanoid@3.3.18:
     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
+  opentype.js@2.0.0:
+    resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
     hasBin: true
 
   picocolors@1.1.1:
@@ -554,6 +571,12 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.302
 
+  '@xterm/addon-ligatures@0.11.0-beta.299(@xterm/xterm@6.1.0-beta.302)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.302
+      lru-cache: 11.5.2
+      opentype.js: 2.0.0
+
   '@xterm/addon-web-links@0.13.0-beta.299(@xterm/xterm@6.1.0-beta.302)':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.302
@@ -622,7 +645,11 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
+  lru-cache@11.5.2: {}
+
   nanoid@3.3.18: {}
+
+  opentype.js@2.0.0: {}
 
   picocolors@1.1.1: {}
 

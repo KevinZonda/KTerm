@@ -39,7 +39,8 @@ internal sealed record AppSettings
                     : DefaultFontSize,
                 LineHeight = double.IsFinite(font.LineHeight)
                     ? Math.Clamp(font.LineHeight, 0.8, 2)
-                    : DefaultLineHeight
+                    : DefaultLineHeight,
+                EnableLigatures = font.EnableLigatures
             },
             Theme = new ThemeSettings
             {
@@ -74,6 +75,8 @@ internal sealed record FontSettings
     public double Size { get; init; } = AppSettings.DefaultFontSize;
 
     public double LineHeight { get; init; } = AppSettings.DefaultLineHeight;
+
+    public bool EnableLigatures { get; init; }
 }
 
 internal sealed record ThemeSettings

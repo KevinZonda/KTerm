@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit';
+import type { LigaturesAddon } from '@xterm/addon-ligatures';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
@@ -43,6 +44,9 @@ export class TerminalController {
   // headless; only OSC color reports are skipped pre-open (its theme service
   // does not exist yet), which apps handle with a timeout fallback.
   private webglAddon?: WebglAddon;
+  private ligaturesAddon?: LigaturesAddon;
+  private ligaturesEnabled: boolean;
+  private ligaturesRevision = 0;
   private webglFailed = false;
   private webglReclaimTimer?: number;
   private opened = false;
@@ -52,6 +56,7 @@ export class TerminalController {
   private lastRows = 0;
   private altScrollRemainder = 0;
   private altScrollWasAltBuffer = false;
+  private disposed = false;
 
   public constructor(
     session: SessionCreated,
@@ -64,6 +69,7 @@ export class TerminalController {
     this.sessionId = session.sessionId;
     this.bridge = bridge;
     this.callbacks = callbacks;
+    this.ligaturesEnabled = font.enableLigatures;
     this.element = document.createElement('div');
     this.element.className = 'terminal-pane';
     this.element.dataset.sessionId = session.sessionId;
@@ -126,6 +132,7 @@ export class TerminalController {
     if (!this.opened) {
       this.terminal.open(this.host);
       this.opened = true;
+      void this.syncLigaturesAddon();
       if (!this.fitNow()) {
         this.scheduleFit();
       }
@@ -226,6 +233,8 @@ export class TerminalController {
     this.terminal.options.fontFamily = font.family;
     this.terminal.options.fontSize = font.size;
     this.terminal.options.lineHeight = font.lineHeight;
+    this.ligaturesEnabled = font.enableLigatures;
+    void this.syncLigaturesAddon();
     if (this.opened) {
       this.scheduleFit();
     }
@@ -270,6 +279,8 @@ export class TerminalController {
   }
 
   public dispose(): void {
+    this.disposed = true;
+    this.ligaturesRevision++;
     if (this.fitTimer !== undefined) {
       window.clearTimeout(this.fitTimer);
     }
@@ -311,6 +322,47 @@ export class TerminalController {
       this.element.classList.remove('renderer-webgl');
       this.element.classList.add('renderer-fallback');
     }
+  }
+
+  private async syncLigaturesAddon(): Promise<void> {
+    const revision = ++this.ligaturesRevision;
+    if (!this.opened || this.disposed || this.ligaturesEnabled === Boolean(this.ligaturesAddon)) {
+      return;
+    }
+
+    let addon: LigaturesAddon | undefined;
+    if (this.ligaturesEnabled) {
+      try {
+        const module = await import('@xterm/addon-ligatures');
+        if (revision !== this.ligaturesRevision || this.disposed || !this.ligaturesEnabled) {
+          return;
+        }
+        addon = new module.LigaturesAddon();
+      } catch (error) {
+        console.error('Could not load the xterm ligatures addon.', error);
+        return;
+      }
+    }
+
+    // WebGL captures font-feature-settings when its texture atlas is created,
+    // so rebuild it after changing ligature support.
+    const restoreWebgl = this.webglAddon !== undefined;
+    if (restoreWebgl) {
+      this.disposeWebgl();
+    }
+
+    if (addon) {
+      this.terminal.loadAddon(addon);
+      this.ligaturesAddon = addon;
+    } else {
+      this.ligaturesAddon?.dispose();
+      this.ligaturesAddon = undefined;
+    }
+
+    if (restoreWebgl && !this.webglFailed) {
+      this.enableWebgl();
+    }
+    this.terminal.refresh(0, this.terminal.rows - 1);
   }
 
   private fitNow(): boolean {
