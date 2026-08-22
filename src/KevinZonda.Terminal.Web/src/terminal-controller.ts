@@ -12,6 +12,12 @@ export interface TerminalCallbacks {
   onTitle(sessionId: string, title: string): void;
 }
 
+interface WebglAddonInternals {
+  _renderer?: {
+    _gl?: WebGL2RenderingContext;
+  };
+}
+
 export class TerminalController {
   private static readonly MIN_FONT_SIZE = 8;
   private static readonly MAX_FONT_SIZE = 72;
@@ -163,14 +169,24 @@ export class TerminalController {
   }
 
   private disposeWebgl(): void {
-    if (!this.webglAddon) {
+    const addon = this.webglAddon;
+    if (!addon) {
       return;
     }
 
-    this.webglAddon.dispose();
     this.webglAddon = undefined;
+    this.releaseWebglAddon(addon);
     this.element.classList.remove('renderer-webgl');
     this.element.classList.add('renderer-fallback');
+  }
+
+  private releaseWebglAddon(addon: WebglAddon): void {
+    // addon-webgl currently removes its canvas on dispose without releasing
+    // the underlying context. Keep this localized compatibility shim until
+    // https://github.com/xtermjs/xterm.js/pull/6069 ships in our pinned build.
+    const context = (addon as unknown as WebglAddonInternals)._renderer?._gl;
+    addon.dispose();
+    context?.getExtension('WEBGL_lose_context')?.loseContext();
   }
 
   public write(data: string): void {
@@ -261,26 +277,38 @@ export class TerminalController {
     this.host.removeEventListener('wheel', this.handleWheel, { capture: true });
     this.resizeObserver.disconnect();
     this.disposables.forEach(disposable => disposable.dispose());
-    this.webglAddon?.dispose();
+    this.disposeWebgl();
     this.terminal.dispose();
     this.element.remove();
   }
 
   private enableWebgl(): void {
+    let addon: WebglAddon | undefined;
     try {
-      const addon = new WebglAddon();
-      addon.onContextLoss(() => {
-        addon.dispose();
-        if (this.webglAddon === addon) {
-          this.webglAddon = undefined;
+      addon = new WebglAddon();
+      const activeAddon = addon;
+      activeAddon.onContextLoss(() => {
+        if (this.webglAddon !== activeAddon) {
+          activeAddon.dispose();
+          return;
         }
+
+        this.webglAddon = undefined;
+        this.webglFailed = true;
+        activeAddon.dispose();
+        this.element.classList.remove('renderer-webgl');
         this.element.classList.add('renderer-fallback');
       });
-      this.terminal.loadAddon(addon);
-      this.webglAddon = addon;
+      this.terminal.loadAddon(activeAddon);
+      this.webglAddon = activeAddon;
+      this.element.classList.remove('renderer-fallback');
       this.element.classList.add('renderer-webgl');
     } catch {
+      if (addon) {
+        this.releaseWebglAddon(addon);
+      }
       this.webglFailed = true;
+      this.element.classList.remove('renderer-webgl');
       this.element.classList.add('renderer-fallback');
     }
   }

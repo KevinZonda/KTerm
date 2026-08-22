@@ -888,11 +888,21 @@ button {
   height: 100%;
 }
 
-.terminal-host .xterm-viewport {
+.terminal-host .xterm {
+  /* A WebGL context loss falls back to xterm's DOM renderer. Chromium's
+     contextual CJK punctuation compression must stay disabled on its fixed
+     cell grid so measurement and rendering use the same glyph widths. */
+  text-spacing-trim: space-all;
+}
+
+.terminal-host .xterm .xterm-viewport {
   background-color: var(--terminal-background);
-  overflow-x: hidden;
-  scrollbar-color: var(--chrome-border, #303845) transparent;
-  scrollbar-width: thin;
+  /* xterm 6.1 uses .xterm-scrollable-element for scrolling, but still keeps
+     this legacy viewport for renderer/overview-ruler compatibility. Its old
+     overflow-y: scroll rule can surface as a native horizontal-looking bar in
+     WebView2, so keep the legacy element clipped and let xterm's new scrollbar
+     own all scrolling. */
+  overflow: hidden;
 }
 
 #status {
